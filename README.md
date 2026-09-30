@@ -5,6 +5,12 @@
 
 Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre datos reales: exploración, preprocesamiento, álgebra lineal, estadística, valores atípicos, gráficos, entrenamiento y evaluación de modelos, y un informe PDF final. Incluye 9 datasets listos para usar.
 
+## Aplicación de Windows
+
+**[Descargar el instalador para Windows](https://drive.google.com/file/d/1ozK9bwAEOEEofJel41qRQI4mLuACOVdJ/view?usp=sharing)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
+
+Para generar el instalador desde el código se usa `pc instalador/construir_instalador.bat` (detalles en `pc instalador/LEEME.txt`).
+
 ## Características
 
 - Subida de datasets propios (CSV o Excel .xlsx/.xls): vista previa para elegir qué columnas usar y cuál es el objetivo; después se analiza en el mismo panel que los datasets incluidos.
@@ -71,12 +77,6 @@ Abre http://127.0.0.1:5050 en el navegador.
 1. Elige un dataset en la pantalla de inicio, o sube el tuyo con **Subir mi CSV / Excel**.
 2. En el panel, ejecuta los pasos en orden: Explorar, Preprocesar, Álgebra lineal, Estadística, Valores atípicos, Gráficos, Entrenar, Evaluar.
 3. Pulsa **Generar PDF** para obtener el informe con todo lo ejecutado.
-
-## Aplicación de Windows
-
-**[Descargar el instalador para Windows](https://drive.google.com/file/d/1ozK9bwAEOEEofJel41qRQI4mLuACOVdJ/view?usp=sharing)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
-
-Para generar el instalador desde el código se usa `pc instalador/construir_instalador.bat` (detalles en `pc instalador/LEEME.txt`).
 
 ## Créditos
 
