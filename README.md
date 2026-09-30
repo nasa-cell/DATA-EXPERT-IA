@@ -19,6 +19,41 @@ Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre 
 
 Python 3.11+, Flask, Pandas, NumPy, Scikit-learn, Matplotlib, Seaborn, ReportLab, HTML/CSS/JavaScript.
 
+## Estructura del proyecto
+
+```text
+DataExpert_IA/
+├── app.py                          # Rutas Flask (páginas y endpoints JSON)
+├── generar_datasets.py             # Genera los 9 CSV de data/
+├── generar_logo.py                 # Genera static/img/logo.png
+├── requirements.txt
+├── README.md
+├── INFORME_DATAEXPERT.md
+│
+├── data/                           # Los 9 datasets + alumnos_nuevos_prueba.csv
+├── src/
+│   ├── dataset_service.py          # Metadatos, carga y estado del análisis en curso
+│   ├── preprocessing_service.py    # Exploración y preprocesamiento
+│   ├── statistics_service.py       # Estadística + varianza/desviación manuales
+│   ├── linear_algebra_service.py   # Vectores, matrices, sistema de ecuaciones
+│   ├── visualization_service.py    # Histogramas, dispersión, correlación, matriz de confusión
+│   ├── machine_learning_service.py # Entrenamiento, evaluación y comparación de modelos
+│   ├── pdf_service.py              # Generación del informe PDF
+│   └── configuracion.py            # Rutas: código (solo lectura) y datos del usuario
+│
+├── templates/                      # base.html, index.html, dashboard.html, subir.html
+├── static/
+│   ├── css/style.css
+│   ├── js/                         # app.js, interfaz.js, iconos.js, subir.js
+│   ├── img/                        # logo.svg, logo.png, datasets/ (portadas)
+│   ├── fuentes/                    # Tipografías locales (web y PDF)
+│   └── graficos/<dataset>/         # Gráficos generados (PNG)
+│
+├── resultados/                     # predicciones, historial y evaluación de modelos
+├── informes/                       # DataExpert_IA_Informe.pdf
+└── pc instalador/                  # Scripts para crear el instalador de Windows
+```
+
 ## Instalación
 
 ```bash
