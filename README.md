@@ -7,6 +7,7 @@ Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre 
 
 ## Características
 
+- Subida de datasets propios (CSV o Excel .xlsx/.xls): vista previa para elegir qué columnas usar y cuál es el objetivo; después se analiza en el mismo panel que los datasets incluidos.
 - Exploración y preprocesamiento con Pandas (nulos, duplicados, codificación, normalización).
 - Álgebra lineal con NumPy: vectores, matrices, producto punto, norma y sistemas de ecuaciones.
 - Estadística descriptiva, con varianza y desviación estándar también implementadas a mano.
@@ -67,7 +68,7 @@ Abre http://127.0.0.1:5050 en el navegador.
 
 ## Uso
 
-1. Elige un dataset en la pantalla de inicio.
+1. Elige un dataset en la pantalla de inicio, o sube el tuyo con **Subir mi CSV / Excel**.
 2. En el panel, ejecuta los pasos en orden: Explorar, Preprocesar, Álgebra lineal, Estadística, Valores atípicos, Gráficos, Entrenar, Evaluar.
 3. Pulsa **Generar PDF** para obtener el informe con todo lo ejecutado.
 
