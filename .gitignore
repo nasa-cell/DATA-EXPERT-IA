@@ -1,0 +1,14 @@
+# Entorno y cachés de Python
+.venv/
+__pycache__/
+*.pyc
+
+# Compilación del instalador (el .exe se publica aparte)
+pc instalador/salida/
+pc instalador/_compilacion/
+build/
+dist/
+
+# Datos locales de la app instalada
+datos_usuario/
+.env

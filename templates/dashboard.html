@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block titulo %}DataExpert IA — {{ meta.nombre }}{% endblock %}
+
+{% block topbar_extra %}
+<span class="chip-dataset">{{ meta.nombre }}</span>
+{% endblock %}
+
+{% block body_style %}style="--tema-a: {{ meta.color_a }}; --tema-b: {{ meta.color_b }};"{% endblock %}
+
+{% block contenido %}
+<section class="panel-dataset">
+    <div class="panel-dataset-icono"><span class="icono" data-icono="{{ meta.id }}"></span></div>
+    <div class="panel-dataset-info">
+        <p class="etiqueta">Dataset seleccionado</p>
+        <h1>{{ meta.nombre }}</h1>
+        <p>{{ meta.descripcion }}</p>
+        <p class="estado-ok"><span class="icono" data-icono="check"></span>Dataset cargado correctamente</p>
+    </div>
+    {% if meta.imagen %}
+    <div class="panel-dataset-foto"><img src="{{ url_for('static', filename=meta.imagen) }}" alt=""></div>
+    {% endif %}
+</section>
+
+<section class="tarjetas-resumen" id="resumen-tarjetas" aria-label="Resumen del dataset">
+    <div class="tarjeta-metrica" data-metrica="registros" style="--retraso: 0ms"><span class="valor">—</span><span class="etiqueta">Registros</span></div>
+    <div class="tarjeta-metrica" data-metrica="variables" style="--retraso: 40ms"><span class="valor">—</span><span class="etiqueta">Variables</span></div>
+    <div class="tarjeta-metrica" data-metrica="nulos" style="--retraso: 80ms"><span class="valor">—</span><span class="etiqueta">Valores nulos</span></div>
+    <div class="tarjeta-metrica" data-metrica="outliers" style="--retraso: 120ms"><span class="valor">—</span><span class="etiqueta">Valores atípicos</span></div>
+    <div class="tarjeta-metrica" data-metrica="modelo" style="--retraso: 160ms"><span class="valor">—</span><span class="etiqueta">Mejor modelo</span></div>
+    <div class="tarjeta-metrica" data-metrica="metrica" style="--retraso: 200ms"><span class="valor">—</span><span class="etiqueta">Métrica principal</span></div>
+</section>
+
+<div class="espacio-trabajo">
+    <nav class="flujo" aria-label="Flujo del análisis">
+        <div class="flujo-cabecera">
+            <h2>Flujo del análisis</h2>
+            <div class="avance" aria-live="polite">
+                <span class="avance-texto" id="avance-texto">0 de 9 pasos hechos</span>
+                <div class="avance-barra"><div class="avance-relleno" id="avance-relleno" style="width: 0%"></div></div>
+            </div>
+        </div>
+        <ol>
+            <li><button class="boton-accion" type="button" data-accion="explorar"><span class="texto-paso"><strong><span class="icono" data-icono="explorar"></span>Explorar datos</strong><small>Tipos, nulos y primeras filas</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="preprocesar"><span class="texto-paso"><strong><span class="icono" data-icono="preprocesar"></span>Preprocesar</strong><small>Limpiar, codificar y normalizar</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="algebra"><span class="texto-paso"><strong><span class="icono" data-icono="algebra"></span>Álgebra lineal</strong><small>Vectores, matrices y sistemas</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="estadistica"><span class="texto-paso"><strong><span class="icono" data-icono="estadistica"></span>Estadística</strong><small>Media, varianza y desviación</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="outliers"><span class="texto-paso"><strong><span class="icono" data-icono="outliers"></span>Valores atípicos</strong><small>Detección por media ± k·σ</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="graficos"><span class="texto-paso"><strong><span class="icono" data-icono="graficos"></span>Gráficos</strong><small>Histogramas y correlación</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="entrenar"><span class="texto-paso"><strong><span class="icono" data-icono="entrenar"></span>Entrenar modelo</strong><small>Compara dos modelos</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="evaluar"><span class="texto-paso"><strong><span class="icono" data-icono="evaluar"></span>Evaluar modelo</strong><small>Métricas y matriz de confusión</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion boton-accion-pdf" type="button" data-accion="pdf"><span class="texto-paso"><strong><span class="icono" data-icono="pdf"></span>Generar PDF</strong><small>Informe con todo lo anterior</small></span><span class="marca-estado"></span></button></li>
+        </ol>
+    </nav>
+
+    <section class="panel-resultado-wrap" aria-label="Resultados">
+        <div id="estado-proceso" class="estado-proceso" hidden></div>
+        <div id="panel-resultado" class="panel-resultado" aria-live="polite">
+            <p class="placeholder">Elige un paso del flujo de análisis para ver aquí sus resultados.</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>window.DATASET_ACTUAL = {{ meta.id | tojson }};</script>
+{% endblock %}

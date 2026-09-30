@@ -1,0 +1,202 @@
+[
+  {
+    "dataset": "Iris",
+    "fecha": "20/09/2026 18:09",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Diabetes",
+    "fecha": "20/09/2026 16:31",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 73.38%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Iris",
+    "fecha": "20/09/2026 16:29",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "estudiantes.csv",
+    "fecha": "20/09/2026 16:27",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.726",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Viviendas",
+    "fecha": "20/09/2026 16:25",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.976",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Notas_Parciales_Evaluacion_30_Alumnos.xlsx",
+    "fecha": "18/09/2026 14:24",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 66.67%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Notas_Parciales_Evaluacion_30_Alumnos.xlsx",
+    "fecha": "18/09/2026 14:23",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 66.67%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "iris.csv",
+    "fecha": "18/09/2026 14:20",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "iris.csv",
+    "fecha": "18/09/2026 14:18",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Clientes",
+    "fecha": "18/09/2026 14:16",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.57%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Viviendas",
+    "fecha": "18/09/2026 14:16",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.976",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Iris",
+    "fecha": "18/09/2026 14:15",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Viviendas",
+    "fecha": "18/09/2026 14:12",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.976",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Estudiantes",
+    "fecha": "18/09/2026 14:11",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.726",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Iris",
+    "fecha": "18/09/2026 14:11",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "iris.csv",
+    "fecha": "18/09/2026 14:09",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "iris.csv",
+    "fecha": "18/09/2026 14:07",
+    "modelo": "Decision Tree",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Notas_Parciales_Evaluacion_30_Alumnos.xlsx",
+    "fecha": "18/09/2026 13:46",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 66.67%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "notas.csv",
+    "fecha": "18/09/2026 13:20",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 1.000",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Notas_Parciales_Evaluacion_30_Alumnos.xlsx",
+    "fecha": "18/09/2026 13:14",
+    "modelo": "Random Forest",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 83.33%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Estudiantes",
+    "fecha": "18/09/2026 13:07",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.726",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Viviendas",
+    "fecha": "18/09/2026 11:14",
+    "modelo": "Linear Regression",
+    "problema": "regresion",
+    "metrica_principal": "R² 0.976",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Empleados",
+    "fecha": "18/09/2026 11:13",
+    "modelo": "Random Forest",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 72.31%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Clientes",
+    "fecha": "18/09/2026 11:12",
+    "modelo": "KNN",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 93.57%",
+    "estado": "Completado"
+  },
+  {
+    "dataset": "Notas_Parciales_Evaluacion_30_Alumnos.xlsx",
+    "fecha": "18/09/2026 11:03",
+    "modelo": "Random Forest",
+    "problema": "clasificacion",
+    "metrica_principal": "Accuracy 83.33%",
+    "estado": "Completado"
+  }
+]

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}DataExpert IA — Subir dataset{% endblock %}
+
+{% block topbar_extra %}
+<a href="{{ url_for('inicio') }}" class="boton boton-fantasma" style="min-height: 40px; padding: 0 16px;"><span class="icono" data-icono="volver"></span>Volver</a>
+{% endblock %}
+
+{% block contenido %}
+<section class="panel-dataset">
+    <div class="panel-dataset-icono"><span class="icono" data-icono="subir"></span></div>
+    <div class="panel-dataset-info">
+        <p class="etiqueta">Dataset propio</p>
+        <h1>Sube tu CSV o Excel</h1>
+        <p>
+            Sube un archivo con tus propios datos (por ejemplo, notas de alumnos, ventas de un negocio, gastos
+            personales o una encuesta) para analizarlo con las mismas herramientas que los datasets incluidos.
+        </p>
+    </div>
+</section>
+
+<section class="panel-acciones">
+    <h2>1. Elige el archivo</h2>
+    <input type="file" id="input-archivo" accept=".csv,.xlsx,.xls" hidden>
+    <div class="zona-soltar" id="zona-soltar" tabindex="0" role="button" aria-label="Elegir un archivo CSV o Excel">
+        <p class="zona-soltar-icono"><span class="icono" data-icono="archivo"></span></p>
+        <p><strong>Arrastra aquí tu documento</strong> o haz clic para elegirlo</p>
+        <p class="texto-tenue" id="nombre-archivo-elegido">.csv o .xlsx</p>
+    </div>
+    <p class="texto-ayuda">
+        Máximo 5 MB o 20.000 filas. Necesita al menos unas 30 a 50 filas para dar un resultado medianamente
+        confiable, y una columna clara de «lo que quieres predecir».
+    </p>
+</section>
+
+<div id="estado-subida" class="estado-proceso" hidden></div>
+
+<section class="panel-resultado-wrap" id="panel-configuracion" hidden>
+    <div class="panel-resultado">
+        <div class="resultado-bloque">
+            <h3>2. Elige las columnas</h3>
+            <p>
+                Marca «Usar» en las columnas que quieres usar para predecir (se resaltan con el color de la
+                página) y «Predecir esto» en la columna que quieres calcular (se resalta en
+                <strong>rosa</strong>). Las que parecen un identificador (nombre, N.º) ya vienen
+                desmarcadas, pero puedes cambiarlo.
+            </p>
+            <p id="aviso-pocas-filas" class="badge badge-aviso" hidden></p>
+            <div class="tabla-subida-wrap">
+                <table class="tabla-subida" id="tabla-subida"></table>
+            </div>
+            <div>
+                <button type="button" class="boton boton-primario" id="boton-confirmar-subida">
+                    Analizar este dataset<span class="icono" data-icono="flecha"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/subir.js') }}"></script>
+{% endblock %}

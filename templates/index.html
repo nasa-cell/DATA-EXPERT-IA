@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block titulo %}DataExpert IA — Inicio{% endblock %}
+
+{% block contenido %}
+<section class="banner" aria-label="DataExpert IA">
+    <div class="banner-marca">
+        <img class="banner-logo" src="{{ url_for('static', filename='img/logo.svg') }}" alt="" width="132" height="132">
+        <div>
+            <p class="banner-nombre">DataExpert IA</p>
+            <p class="banner-lema">Fundamentos y Algoritmia para Inteligencia Artificial</p>
+        </div>
+    </div>
+    <svg class="banner-ilustracion" viewBox="0 0 560 230" role="img" aria-label="Ilustración de barras, tendencia y puntos de datos">
+        <g>
+            <rect x="68" y="118" width="82" height="96" rx="12" fill="#ffd23f"/><rect x="60" y="110" width="82" height="96" rx="12" fill="#ff5c8a" stroke="#14112b" stroke-width="5"/>
+            <rect x="178" y="88" width="82" height="126" rx="12" fill="#ffd23f"/><rect x="170" y="80" width="82" height="126" rx="12" fill="#3dc7ff" stroke="#14112b" stroke-width="5"/>
+            <rect x="288" y="48" width="82" height="166" rx="12" fill="#ffd23f"/><rect x="280" y="40" width="82" height="166" rx="12" fill="#ffffff" stroke="#14112b" stroke-width="5"/>
+        </g>
+        <polyline points="36,176 130,132 232,104 322,62 470,26" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+        <g stroke="#14112b" stroke-width="4">
+            <circle cx="130" cy="132" r="10" fill="#ffd23f"/><circle cx="232" cy="104" r="10" fill="#ffd23f"/><circle cx="322" cy="62" r="10" fill="#ffd23f"/><circle cx="470" cy="26" r="12" fill="#2fe0a1"/>
+        </g>
+        <g>
+            <circle cx="420" cy="150" r="9" fill="#ff5c8a"/><circle cx="452" cy="120" r="7" fill="#3dc7ff"/><circle cx="486" cy="164" r="10" fill="#ffd23f"/>
+            <circle cx="510" cy="112" r="8" fill="#2fe0a1"/><circle cx="536" cy="146" r="7" fill="#ff5c8a"/><circle cx="446" cy="192" r="8" fill="#ffffff"/>
+            <circle cx="500" cy="204" r="6" fill="#3dc7ff"/><circle cx="410" cy="100" r="6" fill="#ffd23f"/><circle cx="540" cy="190" r="9" fill="#ffffff"/>
+        </g>
+    </svg>
+</section>
+
+<section class="hero">
+    <div class="hero-caja">
+        <h1>Analiza datos de verdad</h1>
+        <p class="hero-descripcion">
+            Elige un dataset y recorre un proyecto de ciencia de datos completo: explorar, limpiar, calcular, graficar,
+            entrenar modelos y generar el informe en PDF. Todo se calcula de verdad, sin resultados simulados.
+        </p>
+        <div class="hero-etiquetas">
+            <span class="etiqueta-tema">Álgebra lineal</span>
+            <span class="etiqueta-tema">Estadística</span>
+            <span class="etiqueta-tema">Machine Learning</span>
+        </div>
+        <div class="hero-acciones">
+            <a href="#datasets" class="boton boton-primario">Elegir un dataset<span class="icono" data-icono="abajo"></span></a>
+            <a href="{{ url_for('subir_pagina') }}" class="boton"><span class="icono" data-icono="subir"></span>Subir mi CSV / Excel</a>
+        </div>
+    </div>
+    <aside class="flujo-hero" aria-label="Qué hace la plataforma">
+        <h2>Lo que harás con cada dataset</h2>
+        <ol>
+            <li><strong>Explorar</strong><span>tipos, nulos y filas</span></li>
+            <li><strong>Preprocesar</strong><span>limpiar y normalizar</span></li>
+            <li><strong>Álgebra lineal</strong><span>vectores y matrices</span></li>
+            <li><strong>Estadística</strong><span>media y desviación</span></li>
+            <li><strong>Valores atípicos</strong><span>media ± k·σ</span></li>
+            <li><strong>Gráficos</strong><span>histogramas y correlación</span></li>
+            <li><strong>Entrenar</strong><span>comparar modelos</span></li>
+            <li><strong>Evaluar</strong><span>métricas reales</span></li>
+            <li><strong>Informe PDF</strong><span>todo en un archivo</span></li>
+        </ol>
+    </aside>
+</section>
+
+{% if error %}
+<div class="alerta" role="alert">{{ error }}</div>
+{% endif %}
+
+<section aria-labelledby="titulo-datasets">
+    <div class="titulo-seccion" id="datasets" style="scroll-margin-top: 90px; margin-bottom: 20px;">
+        <h2 id="titulo-datasets">Elige un dataset</h2>
+        <span>{{ datasets|length }} disponibles, sin subir nada</span>
+    </div>
+    <div class="grid-datasets">
+        {% for d in datasets %}
+        <article class="tarjeta-dataset" style="--retraso: {{ loop.index0 * 50 }}ms; --tema-a: {{ d.color_a }}; --tema-b: {{ d.color_b }};">
+            {% if d.imagen %}
+            <div class="tarjeta-foto"><img src="{{ url_for('static', filename=d.imagen) }}" alt="" loading="lazy"></div>
+            {% endif %}
+            <div class="tarjeta-icono"><span class="icono" data-icono="{{ d.id }}"></span></div>
+            <div class="tarjeta-cuerpo">
+                <h3>{{ d.nombre }}</h3>
+                <p>{{ d.descripcion }}</p>
+                <a href="{{ url_for('seleccionar_dataset_pagina', nombre=d.id) }}" class="tarjeta-enlace">
+                    Analizar<span class="icono" data-icono="flecha"></span>
+                </a>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel-subida-inicio">
+    <div class="panel-subida-texto">
+        <h2>¿Tienes tus propios datos?</h2>
+        <p>Sube un archivo CSV o Excel (por ejemplo, notas de tus alumnos, ventas o gastos) y analízalo con las mismas herramientas.</p>
+    </div>
+    <a href="{{ url_for('subir_pagina') }}" class="boton boton-primario"><span class="icono" data-icono="subir"></span>Subir mi CSV / Excel</a>
+</section>
+{% endblock %}

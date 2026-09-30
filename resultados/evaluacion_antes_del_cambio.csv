@@ -1,0 +1,28 @@
+﻿dataset,problema,modelo,es_el_mejor,objetivo,filas_entrenamiento,filas_prueba,accuracy,precision,recall,f1,mae,mse,rmse,r2,mejor_configuracion
+iris,clasificacion,KNN,no,species,119,30,0.9333,0.9444,0.9333,0.9327,,,,,"{""n_neighbors"": 3, ""weights"": ""uniform""}"
+iris,clasificacion,Decision Tree,sí,species,119,30,0.9333,0.9333,0.9333,0.9333,,,,,"{""max_depth"": 5, ""min_samples_leaf"": 1}"
+iris,clasificacion,Random Forest,no,species,119,30,0.9333,0.9333,0.9333,0.9333,,,,,"{""max_depth"": null, ""min_samples_leaf"": 1, ""n_estimators"": 100}"
+diabetes,clasificacion,KNN,sí,Outcome,614,154,0.7338,0.5862,0.3696,0.4533,,,,,"{""n_neighbors"": 5, ""weights"": ""distance""}"
+diabetes,clasificacion,Decision Tree,no,Outcome,614,154,0.6753,0.4412,0.3261,0.375,,,,,"{""max_depth"": 3, ""min_samples_leaf"": 2}"
+diabetes,clasificacion,Random Forest,no,Outcome,614,154,0.7013,0.5,0.3261,0.3947,,,,,"{""max_depth"": 20, ""min_samples_leaf"": 2, ""n_estimators"": 100}"
+viviendas,regresion,Linear Regression,sí,price,480,120,,,,,13195.1409,291505285.5767,17073.5259,0.9765,{}
+viviendas,regresion,Decision Tree,no,price,480,120,,,,,28669.3968,1344298209.5456,36664.6725,0.8915,"{""max_depth"": null, ""min_samples_leaf"": 4}"
+viviendas,regresion,Random Forest,no,price,480,120,,,,,20126.4409,647370376.1049,25443.4741,0.9478,"{""max_depth"": null, ""min_samples_leaf"": 2, ""n_estimators"": 200}"
+vehiculos,regresion,Linear Regression,sí,price,400,100,,,,,1649.241,4498795.826,2121.0365,0.9488,{}
+vehiculos,regresion,Decision Tree,no,price,400,100,,,,,2404.1045,9109236.6731,3018.1512,0.8964,"{""max_depth"": 5, ""min_samples_leaf"": 4}"
+vehiculos,regresion,Random Forest,no,price,400,100,,,,,2078.3004,6749365.3119,2597.9541,0.9232,"{""max_depth"": null, ""min_samples_leaf"": 1, ""n_estimators"": 200}"
+clientes,clasificacion,KNN,sí,segment,560,140,0.9357,0.9354,0.9354,0.9353,,,,,"{""n_neighbors"": 7, ""weights"": ""distance""}"
+clientes,clasificacion,Decision Tree,no,segment,560,140,0.9143,0.9143,0.914,0.914,,,,,"{""max_depth"": 9, ""min_samples_leaf"": 1}"
+clientes,clasificacion,Random Forest,no,segment,560,140,0.9286,0.9286,0.928,0.9274,,,,,"{""max_depth"": null, ""min_samples_leaf"": 2, ""n_estimators"": 100}"
+sintetico,clasificacion,KNN,no,objetivo,800,200,0.87,0.87,0.87,0.87,,,,,"{""n_neighbors"": 11, ""weights"": ""distance""}"
+sintetico,clasificacion,Decision Tree,sí,objetivo,800,200,0.875,0.8641,0.89,0.8768,,,,,"{""max_depth"": 7, ""min_samples_leaf"": 2}"
+sintetico,clasificacion,Random Forest,no,objetivo,800,200,0.865,0.8614,0.87,0.8657,,,,,"{""max_depth"": null, ""min_samples_leaf"": 2, ""n_estimators"": 200}"
+empleados,clasificacion,KNN,no,attrition,520,130,0.6692,0.6774,0.6462,0.6614,,,,,"{""n_neighbors"": 11, ""weights"": ""uniform""}"
+empleados,clasificacion,Decision Tree,no,attrition,520,130,0.6538,0.6923,0.5538,0.6154,,,,,"{""max_depth"": 3, ""min_samples_leaf"": 1}"
+empleados,clasificacion,Random Forest,sí,attrition,520,130,0.7231,0.7164,0.7385,0.7273,,,,,"{""max_depth"": 10, ""min_samples_leaf"": 2, ""n_estimators"": 200}"
+estudiantes,regresion,Linear Regression,sí,final_score,440,110,,,,,5.2175,42.1208,6.4901,0.7258,{}
+estudiantes,regresion,Decision Tree,no,final_score,440,110,,,,,7.8148,89.8919,9.4811,0.4148,"{""max_depth"": 5, ""min_samples_leaf"": 4}"
+estudiantes,regresion,Random Forest,no,final_score,440,110,,,,,6.337,59.81,7.7337,0.6106,"{""max_depth"": 10, ""min_samples_leaf"": 2, ""n_estimators"": 200}"
+prestamos,clasificacion,KNN,no,loan_approved,480,120,0.7,0.6471,0.6471,0.6471,,,,,"{""n_neighbors"": 7, ""weights"": ""uniform""}"
+prestamos,clasificacion,Decision Tree,no,loan_approved,480,120,0.7083,0.6481,0.6863,0.6667,,,,,"{""max_depth"": 5, ""min_samples_leaf"": 2}"
+prestamos,clasificacion,Random Forest,sí,loan_approved,480,120,0.7333,0.6727,0.7255,0.6981,,,,,"{""max_depth"": 10, ""min_samples_leaf"": 1, ""n_estimators"": 200}"

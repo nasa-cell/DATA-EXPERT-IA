@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block titulo %}DataExpert IA{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/logo.svg') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body {% block body_style %}{% endblock %}>
+    <header class="barra">
+        <a href="{{ url_for('inicio') }}" class="marca">
+            <img class="marca-icono" src="{{ url_for('static', filename='img/logo.svg') }}" alt="" width="40" height="40">
+            <span class="marca-texto">
+                <strong>DataExpert IA</strong>
+                <small>Fundamentos y Algoritmia para Inteligencia Artificial</small>
+            </span>
+        </a>
+        <nav class="barra-enlaces" aria-label="Navegación principal">
+            <a href="{{ url_for('inicio') }}"{% if request.endpoint == 'inicio' %} aria-current="page"{% endif %}>Inicio</a>
+            <a href="{{ url_for('subir_pagina') }}"{% if request.endpoint == 'subir_pagina' %} aria-current="page"{% endif %}>Subir mi archivo</a>
+            {% block topbar_extra %}{% endblock %}
+            <details class="cambiar" id="cambiar-dataset">
+                <summary class="boton" style="min-height: 42px; padding: 0 16px;">Datasets<span class="icono" data-icono="abajo"></span></summary>
+                <ul class="cambiar-lista">
+                    {% for d in menu_datasets %}
+                    <li><a href="{{ url_for('seleccionar_dataset_pagina', nombre=d.id) }}" style="--tema-a: {{ d.color_a }}"{% if meta is defined and meta.id == d.id %} aria-current="page"{% endif %}><span class="punto-tema"></span>{{ d.nombre }}</a></li>
+                    {% endfor %}
+                </ul>
+            </details>
+        </nav>
+    </header>
+
+    <main class="contenedor">
+        {% block contenido %}{% endblock %}
+    </main>
+
+    <div id="toast-contenedor" class="toast-contenedor" aria-live="polite"></div>
+
+    <script src="{{ url_for('static', filename='js/iconos.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/interfaz.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
