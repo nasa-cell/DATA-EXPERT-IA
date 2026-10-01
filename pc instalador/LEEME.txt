@@ -10,16 +10,19 @@ Si Windows muestra «Windows protegió su PC» (el instalador no está firmado):
 
 DÓNDE SE GUARDA TU TRABAJO
   Todo queda en el PC, dentro de la carpeta donde instalaste la aplicación, en la subcarpeta  datos_usuario :
-  informes PDF, resultados (predicciones, historial) y gráficos generados.
+  informes PDF, resultados (predicciones, historial), gráficos generados, los datasets que subas
+  (con su foto de portada y su color) y el análisis de cada dataset (los pasos ya hechos siguen marcados
+  hasta que pulses "Reiniciar análisis").
   - Para verla: el botón "Abrir la carpeta de mis datos" de la ventana de DataExpert IA, o el menú Inicio > "Mis datos de DataExpert IA".
   - Actualizar o reinstalar NO borra esa carpeta.
   - Al desinstalar te pregunta si quieres borrarla; si dices que No, se conserva.
   - Para hacer una copia de seguridad, copia esa carpeta.
-  Los 9 datasets de ejemplo vienen dentro de la aplicación; los archivos que subas se analizan en memoria y no se guardan.
+  Los 9 datasets de ejemplo vienen dentro de la aplicación; los archivos que subas quedan guardados en datos_usuario\datasets_subidos.
 
 CÓMO SE USA
   Al abrir DataExpert IA aparece una ventana pequeña y se abre la aplicación en el navegador (http://127.0.0.1:5050 o el siguiente puerto libre).
-  Para cerrarla, pulsa "Cerrar DataExpert IA" en esa ventana (si se está entrenando un modelo te avisa).
+  Si cambias de página mientras se calcula un paso, sigue calculando y te avisa al terminar.
+  Para cerrarla, pulsa "Cerrar DataExpert IA" en esa ventana (si todavía se está calculando algo te avisa).
 
 PARA PREPARAR UNA NUEVA VERSIÓN DEL INSTALADOR (quien mantiene el proyecto)
   Ejecuta construir_instalador.bat (necesita Python 3.11, conexión a internet la primera vez e Inno Setup 6).

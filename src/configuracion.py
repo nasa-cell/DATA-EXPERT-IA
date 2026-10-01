@@ -25,6 +25,9 @@ else:
 INFORMES_DIR = RAIZ / "informes"
 RESULTADOS_DIR = RAIZ / "resultados"
 HISTORIAL_PATH = RESULTADOS_DIR / "historial.json"
+# Datasets que sube la persona (cada uno en su carpeta con datos.csv, info.json y su portada) y el análisis guardado de cada dataset.
+SUBIDOS_DIR = RAIZ / "datasets_subidos"
+ESTADOS_DIR = RAIZ / "analisis_guardados"
 
 # Los gráficos generados se sirven desde una ruta propia cuando viven fuera del código empaquetado.
 if RAIZ == CODIGO:
@@ -36,7 +39,7 @@ else:
 
 
 def preparar_carpetas():
-    for carpeta in (RAIZ, INFORMES_DIR, RESULTADOS_DIR, GRAFICOS_DIR):
+    for carpeta in (RAIZ, INFORMES_DIR, RESULTADOS_DIR, GRAFICOS_DIR, SUBIDOS_DIR, ESTADOS_DIR):
         carpeta.mkdir(parents=True, exist_ok=True)
 
 

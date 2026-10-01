@@ -48,6 +48,15 @@
             <div class="tabla-subida-wrap">
                 <table class="tabla-subida" id="tabla-subida"></table>
             </div>
+            <h3>3. Foto de portada (opcional)</h3>
+            <p>Aparece en la tarjeta del dataset y en la portada del informe PDF. Puedes ponerla o cambiarla después.</p>
+            <input type="file" id="input-portada-subida" accept=".jpg,.jpeg,.png,.webp" hidden>
+            <div class="zona-soltar zona-portada" id="zona-portada-subida" tabindex="0" role="button" aria-label="Elegir una foto de portada">
+                <img id="vista-portada-subida" alt="" hidden>
+                <p class="zona-soltar-icono"><span class="icono" data-icono="subir"></span></p>
+                <p><strong>Arrastra aquí una foto</strong> o haz clic para elegirla</p>
+                <p class="texto-tenue" id="nombre-portada-elegida">.jpg, .png o .webp · máximo 8 MB</p>
+            </div>
             <div>
                 <button type="button" class="boton boton-primario" id="boton-confirmar-subida">
                     Analizar este dataset<span class="icono" data-icono="flecha"></span>

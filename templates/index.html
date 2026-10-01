@@ -65,18 +65,15 @@
 <div class="alerta" role="alert">{{ error }}</div>
 {% endif %}
 
-<section aria-labelledby="titulo-datasets">
-    <div class="titulo-seccion" id="datasets" style="scroll-margin-top: 90px; margin-bottom: 20px;">
-        <h2 id="titulo-datasets">Elige un dataset</h2>
-        <span>{{ datasets|length }} disponibles, sin subir nada</span>
-    </div>
-    <div class="grid-datasets">
-        {% for d in datasets %}
-        <article class="tarjeta-dataset" style="--retraso: {{ loop.index0 * 50 }}ms; --tema-a: {{ d.color_a }}; --tema-b: {{ d.color_b }};">
-            {% if d.imagen %}
-            <div class="tarjeta-foto"><img src="{{ url_for('static', filename=d.imagen) }}" alt="" loading="lazy"></div>
+{% set incluidos = datasets | rejectattr("subido") | list %}
+{% set subidos = datasets | selectattr("subido") | list %}
+
+{% macro tarjeta(d, indice) %}
+        <article class="tarjeta-dataset" style="--retraso: {{ indice * 50 }}ms; --tema-a: {{ d.color_a }}; --tema-b: {{ d.color_b }};">
+            {% if d.imagen_url %}
+            <div class="tarjeta-foto{% if d.portada_ajuste == 'contener' %} foto-contener{% endif %}" style="--foto: url('{{ d.imagen_url }}')"><img src="{{ d.imagen_url }}" alt="" loading="lazy"></div>
             {% endif %}
-            <div class="tarjeta-icono"><span class="icono" data-icono="{{ d.id }}"></span></div>
+            <div class="tarjeta-icono"><span class="icono" data-icono="{{ 'subido' if d.subido else d.id }}"></span></div>
             <div class="tarjeta-cuerpo">
                 <h3>{{ d.nombre }}</h3>
                 <p>{{ d.descripcion }}</p>
@@ -85,7 +82,27 @@
                 </a>
             </div>
         </article>
-        {% endfor %}
+{% endmacro %}
+
+{% if subidos %}
+<section aria-labelledby="titulo-subidos">
+    <div class="titulo-seccion" id="mis-datasets" style="scroll-margin-top: 90px; margin-bottom: 20px;">
+        <h2 id="titulo-subidos">Tus datasets</h2>
+        <span>{{ subidos|length }} {{ "guardado" if subidos|length == 1 else "guardados" }} en este equipo</span>
+    </div>
+    <div class="grid-datasets grid-uniforme">
+        {% for d in subidos | reverse %}{{ tarjeta(d, loop.index0) }}{% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section aria-labelledby="titulo-datasets">
+    <div class="titulo-seccion" id="datasets" style="scroll-margin-top: 90px; margin-bottom: 20px;">
+        <h2 id="titulo-datasets">Elige un dataset</h2>
+        <span>{{ incluidos|length }} disponibles, sin subir nada</span>
+    </div>
+    <div class="grid-datasets">
+        {% for d in incluidos %}{{ tarjeta(d, loop.index0) }}{% endfor %}
     </div>
 </section>
 

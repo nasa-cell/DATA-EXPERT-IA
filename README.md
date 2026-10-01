@@ -13,13 +13,15 @@ Para generar el instalador desde el código se usa `pc instalador/construir_inst
 
 ## Características
 
-- Subida de datasets propios (CSV o Excel .xlsx/.xls): vista previa para elegir qué columnas usar y cuál es el objetivo; después se analiza en el mismo panel que los datasets incluidos.
+- Subida de datasets propios (CSV o Excel .xlsx/.xls): vista previa para elegir qué columnas usar y cuál es el objetivo; quedan guardados en el equipo, con foto de portada opcional (sale también en el PDF).
+- El análisis de cada dataset se guarda: al volver (o al abrir otra vez la aplicación) los pasos hechos siguen marcados y se muestran sin recalcular, hasta pulsar «Reiniciar análisis». Los pasos siguen calculando aunque se cambie de página, y la aplicación avisa al terminar.
+- Color elegible para cada dataset (página e informe PDF).
 - Exploración y preprocesamiento con Pandas (nulos, duplicados, codificación, normalización).
 - Álgebra lineal con NumPy: vectores, matrices, producto punto, norma y sistemas de ecuaciones.
 - Estadística descriptiva, con varianza y desviación estándar también implementadas a mano.
 - Detección de valores atípicos (media ± k·σ).
 - Gráficos con Matplotlib y Seaborn.
-- Modelos de Scikit-learn para clasificación o regresión (se detecta automáticamente), con métricas reales.
+- Modelos de Scikit-learn para clasificación o regresión (se detecta automáticamente), con métricas reales. Cada modelo es un Pipeline que rellena, codifica y escala aprendiendo solo de la parte de entrenamiento, y el mejor se elige por validación cruzada.
 - Informe PDF con ReportLab.
 
 ## Tecnologías
@@ -39,7 +41,7 @@ DataExpert_IA/
 │
 ├── data/                           # Los 9 datasets + alumnos_nuevos_prueba.csv
 ├── src/
-│   ├── dataset_service.py          # Metadatos, carga y estado del análisis en curso
+│   ├── dataset_service.py          # Metadatos, datasets subidos, portadas, colores y análisis guardado
 │   ├── preprocessing_service.py    # Exploración y preprocesamiento
 │   ├── statistics_service.py       # Estadística + varianza/desviación manuales
 │   ├── linear_algebra_service.py   # Vectores, matrices, sistema de ecuaciones

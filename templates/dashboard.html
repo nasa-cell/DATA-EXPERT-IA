@@ -9,15 +9,32 @@
 
 {% block contenido %}
 <section class="panel-dataset">
-    <div class="panel-dataset-icono"><span class="icono" data-icono="{{ meta.id }}"></span></div>
+    <div class="panel-dataset-icono"><span class="icono" data-icono="{{ 'subido' if meta.subido else meta.id }}"></span></div>
     <div class="panel-dataset-info">
         <p class="etiqueta">Dataset seleccionado</p>
         <h1>{{ meta.nombre }}</h1>
         <p>{{ meta.descripcion }}</p>
+        <div class="selector-color" role="group" aria-label="Color de este dataset">
+            <span class="selector-color-etiqueta">Color</span>
+            {% for c in colores_tema %}
+            <button type="button" class="muestra-color{% if c == meta.color_a %} activa{% endif %}" data-color="{{ c }}" style="--muestra: {{ c }}" aria-label="Usar el color {{ c }}" title="{{ c }}"></button>
+            {% endfor %}
+            <label class="muestra-color muestra-personal{% if meta.color_a not in colores_tema %} activa{% endif %}" title="Elegir otro color" style="--muestra: {{ meta.color_a }}">
+                <input type="color" id="color-personal" value="{{ meta.color_a }}" aria-label="Elegir otro color">
+            </label>
+        </div>
         <p class="estado-ok"><span class="icono" data-icono="check"></span>Dataset cargado correctamente</p>
     </div>
-    {% if meta.imagen %}
-    <div class="panel-dataset-foto"><img src="{{ url_for('static', filename=meta.imagen) }}" alt=""></div>
+    {% if meta.subido %}
+    <div class="panel-dataset-foto panel-dataset-foto-editable{% if meta.portada_ajuste == 'contener' %} foto-contener{% endif %}" id="zona-portada"{% if meta.imagen_url %} style="--foto: url('{{ meta.imagen_url }}')"{% endif %}>
+        {% if meta.imagen_url %}<img src="{{ meta.imagen_url }}" alt="" id="imagen-portada">{% endif %}
+        <input type="file" id="input-portada" accept=".jpg,.jpeg,.png,.webp" hidden>
+        <button type="button" class="boton boton-portada" id="boton-portada">
+            <span class="icono" data-icono="subir"></span>{{ "Cambiar portada" if meta.imagen_url else "Poner foto de portada" }}
+        </button>
+    </div>
+    {% elif meta.imagen_url %}
+    <div class="panel-dataset-foto"><img src="{{ meta.imagen_url }}" alt=""></div>
     {% endif %}
 </section>
 
@@ -38,6 +55,7 @@
                 <span class="avance-texto" id="avance-texto">0 de 9 pasos hechos</span>
                 <div class="avance-barra"><div class="avance-relleno" id="avance-relleno" style="width: 0%"></div></div>
             </div>
+            <button type="button" class="boton boton-fantasma boton-reiniciar" id="boton-reiniciar"><span class="icono" data-icono="recalcular"></span>Reiniciar análisis</button>
         </div>
         <ol>
             <li><button class="boton-accion" type="button" data-accion="explorar"><span class="texto-paso"><strong><span class="icono" data-icono="explorar"></span>Explorar datos</strong><small>Tipos, nulos y primeras filas</small></span><span class="marca-estado"></span></button></li>
@@ -46,7 +64,7 @@
             <li><button class="boton-accion" type="button" data-accion="estadistica"><span class="texto-paso"><strong><span class="icono" data-icono="estadistica"></span>Estadística</strong><small>Media, varianza y desviación</small></span><span class="marca-estado"></span></button></li>
             <li><button class="boton-accion" type="button" data-accion="outliers"><span class="texto-paso"><strong><span class="icono" data-icono="outliers"></span>Valores atípicos</strong><small>Detección por media ± k·σ</small></span><span class="marca-estado"></span></button></li>
             <li><button class="boton-accion" type="button" data-accion="graficos"><span class="texto-paso"><strong><span class="icono" data-icono="graficos"></span>Gráficos</strong><small>Histogramas y correlación</small></span><span class="marca-estado"></span></button></li>
-            <li><button class="boton-accion" type="button" data-accion="entrenar"><span class="texto-paso"><strong><span class="icono" data-icono="entrenar"></span>Entrenar modelo</strong><small>Compara dos modelos</small></span><span class="marca-estado"></span></button></li>
+            <li><button class="boton-accion" type="button" data-accion="entrenar"><span class="texto-paso"><strong><span class="icono" data-icono="entrenar"></span>Entrenar modelo</strong><small>Compara varios modelos</small></span><span class="marca-estado"></span></button></li>
             <li><button class="boton-accion" type="button" data-accion="evaluar"><span class="texto-paso"><strong><span class="icono" data-icono="evaluar"></span>Evaluar modelo</strong><small>Métricas y matriz de confusión</small></span><span class="marca-estado"></span></button></li>
             <li><button class="boton-accion boton-accion-pdf" type="button" data-accion="pdf"><span class="texto-paso"><strong><span class="icono" data-icono="pdf"></span>Generar PDF</strong><small>Informe con todo lo anterior</small></span><span class="marca-estado"></span></button></li>
         </ol>

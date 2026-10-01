@@ -12,3 +12,7 @@ dist/
 # Datos locales de la app instalada
 datos_usuario/
 .env
+
+# Datasets subidos y análisis guardados al usar la aplicación desde el código
+datasets_subidos/
+analisis_guardados/

@@ -37,6 +37,7 @@
 
     <div id="toast-contenedor" class="toast-contenedor" aria-live="polite"></div>
 
+    <script>window.ARRANQUE = {{ arranque | tojson }};</script>
     <script src="{{ url_for('static', filename='js/iconos.js') }}"></script>
     <script src="{{ url_for('static', filename='js/interfaz.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

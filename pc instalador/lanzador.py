@@ -94,9 +94,14 @@ class Arranque:
         return self.url
 
     def procesos_en_curso(self):
+        nombres = {"explorar": "Exploración", "preprocesar": "Preprocesamiento", "algebra": "Álgebra lineal",
+                   "estadistica": "Estadística", "outliers": "Valores atípicos", "graficos": "Gráficos",
+                   "entrenar": "Entrenamiento de modelos", "evaluar": "Evaluación", "pdf": "Informe PDF"}
         try:
-            if self.modulo and self.modulo.ENTRENAMIENTO.get("activo"):
-                return ["Entrenamiento de modelos"]
+            if self.modulo:
+                with self.modulo._LOCK_ACTIVIDAD:
+                    activos = list(self.modulo.ACTIVIDAD["activos"].values())
+                return [nombres.get(p["accion"], p["accion"]) for p in activos]
         except Exception:
             pass
         return []

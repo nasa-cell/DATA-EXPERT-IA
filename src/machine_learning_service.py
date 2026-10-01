@@ -1,16 +1,26 @@
 """Entrenamiento y evaluación de modelos de Machine Learning con Scikit-learn.
 
 Detecta automáticamente si el problema es de clasificación o regresión según la variable
-objetivo, entrena dos modelos apropiados y los compara con métricas reales (nada de
+objetivo, entrena varios modelos apropiados y los compara con métricas reales (nada de
 valores fijos o inventados).
+
+Cada modelo es un Pipeline: rellenar nulos, codificar categorías y escalar se ajustan SOLO
+con la parte de entrenamiento (y dentro de cada partición de la validación cruzada), así la
+parte de prueba nunca influye en lo que el modelo aprende. El mejor modelo se elige por su
+puntuación de validación cruzada, no por el resultado en la prueba, que queda como una
+medida honesta de cómo le iría con datos nuevos.
 """
 
 import numpy as np
 import pandas as pd
 from sklearn.base import clone
+from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 from sklearn.model_selection import (
     train_test_split, ParameterGrid, StratifiedKFold, KFold, cross_val_score,
 )
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -22,11 +32,11 @@ from sklearn.metrics import (
 
 RANDOM_STATE = 42
 
-# Grilla pequeña de hiperparámetros por modelo: GridSearchCV prueba todas las combinaciones
-# con validación cruzada (cv=5) SOLO sobre el conjunto de entrenamiento, y se queda con la
-# que mejor generaliza — en vez de usar un valor fijo elegido a mano (como antes), que podía
-# quedar mal para un dataset y bien para otro. Linear Regression no tiene hiperparámetros
-# relevantes para ajustar (es la solución analítica exacta), por eso no aparece aquí.
+# Grilla pequeña de hiperparámetros por modelo: se prueban todas las combinaciones con
+# validación cruzada SOLO sobre el conjunto de entrenamiento, y se queda con la que mejor
+# generaliza — en vez de usar un valor fijo elegido a mano, que podía quedar mal para un
+# dataset y bien para otro. Linear Regression no tiene hiperparámetros relevantes para
+# ajustar (es la solución analítica exacta), por eso no aparece aquí.
 GRILLAS = {
     "KNN": {"n_neighbors": [3, 5, 7, 9, 11], "weights": ["uniform", "distance"]},
     "Decision Tree": {"max_depth": [3, 5, 7, 9, None], "min_samples_leaf": [1, 2, 4]},
@@ -37,21 +47,15 @@ GRILLAS = {
 
 
 def detectar_tipo_problema(y: pd.Series) -> str:
-    """Clasificación si el objetivo es texto o tiene pocos valores distintos; si no, regresión."""
-    if y.dtype == object or str(y.dtype).startswith("category"):
+    """Clasificación si el objetivo es texto o tiene pocos valores distintos (enteros, aunque
+    pandas los haya leído como decimales por tener huecos); si no, regresión."""
+    y = y.dropna()
+    if not pd.api.types.is_numeric_dtype(y) or pd.api.types.is_bool_dtype(y):
         return "clasificacion"
-    if pd.api.types.is_integer_dtype(y) and y.nunique() <= 15:
+    son_enteros = pd.api.types.is_integer_dtype(y) or (len(y) > 0 and bool(np.all(np.mod(y, 1) == 0)))
+    if son_enteros and y.nunique() <= 15:
         return "clasificacion"
     return "regresion"
-
-
-def preparar_X_y(df: pd.DataFrame, objetivo: str):
-    y = df[objetivo]
-    X = df.drop(columns=[objetivo])
-    # Cualquier columna categórica remanente (no debería haberla tras el preprocesamiento,
-    # pero se cubre por seguridad) se convierte a dummies para poder entrenar el modelo.
-    X = pd.get_dummies(X, drop_first=True)
-    return X, y
 
 
 def modelos_para(problema: str) -> dict:
@@ -62,7 +66,7 @@ def modelos_para(problema: str) -> dict:
             "Random Forest": RandomForestClassifier(random_state=RANDOM_STATE, n_estimators=200),
             # Se agregó porque, con validación cruzada anidada sobre los mismos CSV, aprendió mejor que los otros tres:
             # Clientes 94,3 -> 98,7 %, Iris 94,6 -> 98,0 %, Sintético 88,9 -> 91,3 %, Préstamos 71,3 -> 74,8 %, y en
-            # Diabetes detecta el 70 % de los casos positivos en vez del 26 %. Los datos ya llegan normalizados del preprocesamiento.
+            # Diabetes detecta el 70 % de los casos positivos en vez del 26 %.
             "Logistic Regression": LogisticRegression(max_iter=2000),
         }
     return {
@@ -70,6 +74,28 @@ def modelos_para(problema: str) -> dict:
         "Decision Tree": DecisionTreeRegressor(random_state=RANDOM_STATE, max_depth=6),
         "Random Forest": RandomForestRegressor(random_state=RANDOM_STATE, n_estimators=200),
     }
+
+
+def construir_pipeline(modelo, numericas: list, categoricas: list) -> Pipeline:
+    """Preparación de los datos + modelo en un solo objeto: al entrenarlo, la media para
+    rellenar, las categorías y la escala se aprenden solo de los datos que recibe."""
+    partes = []
+    if numericas:
+        partes.append(("num", Pipeline([
+            ("rellenar", SimpleImputer(strategy="mean")), ("escalar", StandardScaler()),
+        ]), numericas))
+    if categoricas:
+        partes.append(("cat", Pipeline([
+            ("rellenar", SimpleImputer(strategy="most_frequent")),
+            ("codificar", OneHotEncoder(handle_unknown="ignore", drop="if_binary", sparse_output=False)),
+            ("escalar", StandardScaler()),
+        ]), categoricas))
+    preparar = ColumnTransformer(partes, verbose_feature_names_out=False)
+    return Pipeline([("preparar", preparar), ("modelo", modelo)])
+
+
+def nombres_variables(pipeline: Pipeline) -> list:
+    return [str(n) for n in pipeline.named_steps["preparar"].get_feature_names_out()]
 
 
 def _metricas_clasificacion(y_test, y_pred) -> dict:
@@ -92,100 +118,75 @@ def _metricas_regresion(y_test, y_pred) -> dict:
     }
 
 
-def _particiones_y_cv(nombre: str, problema: str):
-    """Cantidad de particiones y objeto de validación cruzada para un modelo, replicando
-    exactamente lo que GridSearchCV arma internamente para cv=<entero> (shuffle=False),
-    para que el resultado de la búsqueda manual sea idéntico al de antes.
-
-    En clasificación se usan 10 particiones (en vez de 5): con datasets chicos y clases
-    desbalanceadas (p. ej. Diabetes, ~30% positivos), 5 particiones dieron una estimación
-    ruidosa que en una prueba real llegó a elegir un modelo peor que el que había antes
-    (n_neighbors=3 con weights="distance" via CV, contra n_neighbors=5 fijo: 67.5% vs 73.4%
-    de accuracy en el conjunto de prueba). Con 10 particiones la búsqueda vuelve a acertar.
-    En regresión (Random Forest) se probó lo mismo y 5 particiones ya daban un resultado
-    estable e idéntico a 10, así que ahí se deja en 5 para no duplicar el tiempo de espera
-    sin ninguna mejora real."""
-    particiones = 10 if problema == "clasificacion" else 5
-    cv = StratifiedKFold(n_splits=particiones) if problema == "clasificacion" else KFold(n_splits=particiones)
-    return particiones, cv
+def _particiones(problema: str, y_train) -> int:
+    """En clasificación 10 particiones (con datasets chicos y clases desbalanceadas, como
+    Diabetes, 5 daban una estimación ruidosa que llegó a elegir un modelo peor); en regresión
+    5 ya daban un resultado estable e idéntico a 10. Con archivos subidos muy chicos se baja
+    para que cada partición tenga al menos un caso de cada clase."""
+    if problema == "clasificacion":
+        return int(max(2, min(10, pd.Series(y_train).value_counts().min())))
+    return int(max(2, min(5, len(y_train) // 2)))
 
 
-def pasos_de_busqueda(nombre: str, problema: str) -> int:
-    """Cantidad exacta de ajustes (fits) que le toma a un modelo su búsqueda de
-    hiperparámetros: una combinación de la grilla se evalúa con `particiones` fits de
-    validación cruzada, más 1 fit final sobre todo el set de entrenamiento con la mejor
-    combinación. Sirve para calcular el total de la barra de progreso ANTES de arrancar,
-    así el porcentaje mostrado es exacto y no una estimación."""
-    grilla = GRILLAS.get(nombre)
-    if not grilla:
-        return 1  # Linear Regression: un único fit, sin búsqueda.
-    particiones, _ = _particiones_y_cv(nombre, problema)
-    return len(list(ParameterGrid(grilla))) * particiones + 1
+def _grilla_valida(nombre: str, filas_por_particion: int) -> dict:
+    """KNN no puede pedir más vecinos que filas tiene cada partición de entrenamiento."""
+    grilla = dict(GRILLAS.get(nombre) or {})
+    if "n_neighbors" in grilla:
+        grilla["n_neighbors"] = [k for k in grilla["n_neighbors"] if k <= filas_por_particion] or [1]
+    return grilla
 
 
-def _entrenar_con_busqueda(nombre: str, modelo, X_train, y_train, problema: str, on_paso=None):
-    """Si el modelo tiene una grilla de hiperparámetros definida, prueba cada combinación
-    a mano con validación cruzada (mismo resultado que GridSearchCV, pero reportando el
-    avance fit por fit vía `on_paso`) y devuelve la mejor; si no (Linear Regression),
-    simplemente lo entrena tal cual.
-
-    Se evita `n_jobs=-1` (paralelizar entre procesos) a propósito: en Windows, si el
-    servidor de Flask se reinicia o se corta a la mitad de una búsqueda, esos procesos
-    hijos (joblib/loky) pueden quedar huérfanos corriendo en segundo plano. Con los
-    datasets de este proyecto (cientos de filas, grillas chicas) la búsqueda ya es rápida
-    en un solo proceso, así que no vale la pena el riesgo."""
-    grilla = GRILLAS.get(nombre)
-    if not grilla:
-        modelo.fit(X_train, y_train)
-        if on_paso:
-            on_paso(1)
-        return modelo, {}
-
-    metrica_busqueda = "f1_macro" if problema == "clasificacion" else "r2"
-    particiones, cv = _particiones_y_cv(nombre, problema)
-
-    mejor_score, mejores_parametros = -np.inf, None
-    for parametros in ParameterGrid(grilla):
-        estimador = clone(modelo).set_params(**parametros)
-        score = cross_val_score(
-            estimador, X_train, y_train, cv=cv, scoring=metrica_busqueda, n_jobs=1
-        ).mean()
-        if on_paso:
-            on_paso(particiones)
-        if score > mejor_score:
-            mejor_score, mejores_parametros = score, parametros
-
-    mejor_modelo = clone(modelo).set_params(**mejores_parametros)
-    mejor_modelo.fit(X_train, y_train)
-    if on_paso:
-        on_paso(1)
-    return mejor_modelo, mejores_parametros
+def _validar_clases(y: pd.Series, objetivo: str, mapeo_objetivo: dict = None):
+    conteo = y.value_counts()
+    if len(conteo) < 2:
+        raise ValueError(f'La variable objetivo "{objetivo}" tiene un solo valor: no hay nada que predecir.')
+    raras = conteo[conteo < 2]
+    if len(raras):
+        etiquetas = ", ".join(f'"{mapeo_objetivo.get(int(c), c) if mapeo_objetivo else c}"' for c in raras.index)
+        raise ValueError(
+            f'En "{objetivo}", la categoría {etiquetas} aparece en una sola fila. Hacen falta al menos 2 filas de '
+            "cada categoría para separar datos de entrenamiento y de prueba. Agrega más casos de esa categoría "
+            "o quita esa fila del archivo."
+        )
 
 
-def calcular_total_pasos(problema: str) -> int:
-    """Total exacto de fits que va a hacer `entrenar()` para este tipo de problema, sumando
-    los de cada modelo candidato. Se calcula ANTES de entrenar para inicializar la barra de
-    progreso con un total real (no una estimación a ojo)."""
-    return sum(pasos_de_busqueda(nombre, problema) for nombre in modelos_para(problema))
+def entrenar(datos: dict, objetivo: str, on_progreso=None) -> dict:
+    """Entrena los modelos apropiados según el tipo de problema detectado, ajustando los
+    hiperparámetros de cada uno por validación cruzada y eligiendo el mejor por esa misma
+    puntuación. `datos` es lo que devuelve preprocessing_service.preparar_para_modelo().
 
+    `on_progreso(hecho, total)`, si se pasa, se llama después de cada ajuste (fit) con la
+    cantidad de pasos completados y el total, para que la interfaz muestre un porcentaje exacto.
 
-def entrenar(df: pd.DataFrame, objetivo: str, on_progreso=None) -> dict:
-    """Entrena el/los modelo(s) apropiados según el tipo de problema detectado, ajustando
-    los hiperparámetros de cada uno por validación cruzada antes de compararlos.
+    Se evita `n_jobs=-1` a propósito: en Windows, si el servidor se corta a mitad de una
+    búsqueda, esos procesos hijos pueden quedar huérfanos en segundo plano. Con los datasets
+    de este proyecto la búsqueda ya es rápida en un solo proceso."""
+    df = datos["df"]
+    numericas, categoricas = datos["numericas"], datos["categoricas"]
+    if not numericas and not categoricas:
+        raise ValueError("No queda ninguna columna para predecir: elige al menos una además del objetivo.")
 
-    `on_progreso(hecho, total)`, si se pasa, se llama después de cada fit con la cantidad
-    de pasos completados hasta el momento y el total ya conocido (ver `calcular_total_pasos`),
-    para que la interfaz pueda mostrar un porcentaje exacto mientras entrena."""
-    problema = detectar_tipo_problema(df[objetivo])
-    X, y = preparar_X_y(df, objetivo)
+    y = df[objetivo]
+    X = df[numericas + categoricas]
+    problema = detectar_tipo_problema(y)
+    if len(df) < 10:
+        raise ValueError(f"Hay solo {len(df)} filas útiles: hacen falta al menos 10 para entrenar y probar un modelo.")
+    if problema == "clasificacion":
+        _validar_clases(y, objetivo, datos.get("mapeo_objetivo"))
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=RANDOM_STATE,
         stratify=y if problema == "clasificacion" else None,
     )
 
+    particiones = _particiones(problema, y_train)
+    cv = StratifiedKFold(n_splits=particiones) if problema == "clasificacion" else KFold(n_splits=particiones)
+    metrica_cv = "f1_macro" if problema == "clasificacion" else "r2"
+    filas_por_particion = len(X_train) - int(np.ceil(len(X_train) / particiones))
+
     candidatos = modelos_para(problema)
-    total_pasos = calcular_total_pasos(problema)
+    grillas = {nombre: _grilla_valida(nombre, filas_por_particion) for nombre in candidatos}
+    total_pasos = sum((len(ParameterGrid(g)) if g else 1) * particiones + 1 for g in grillas.values())
     pasos_hechos = 0
 
     def _avanzar(cantidad):
@@ -194,51 +195,52 @@ def entrenar(df: pd.DataFrame, objetivo: str, on_progreso=None) -> dict:
         if on_progreso:
             on_progreso(pasos_hechos, total_pasos)
 
-    resultados_por_modelo = {}
-    parametros_por_modelo = {}
-    modelos_entrenados = {}
-    y_pred_por_modelo = {}
-    mejor_nombre, mejor_score, mejor_modelo, mejor_pred = None, -np.inf, None, None
+    _avanzar(0)
+    comparacion, parametros_por_modelo, modelos_entrenados, y_pred_por_modelo = {}, {}, {}, {}
+    mejor_nombre, mejor_cv = None, -np.inf
 
     for nombre, modelo in candidatos.items():
-        modelo_entrenado, mejores_parametros = _entrenar_con_busqueda(
-            nombre, modelo, X_train, y_train, problema, on_paso=_avanzar
-        )
-        y_pred = modelo_entrenado.predict(X_test)
-        modelos_entrenados[nombre] = modelo_entrenado
-        parametros_por_modelo[nombre] = mejores_parametros
+        base = construir_pipeline(modelo, numericas, categoricas)
+        grilla = grillas[nombre]
+        # Si todas las combinaciones fallaran en la validación, se entrena con la configuración por defecto.
+        mejor_score, mejores_parametros = -np.inf, {}
+        for parametros in (ParameterGrid(grilla) if grilla else [{}]):
+            estimador = clone(base).set_params(**{f"modelo__{k}": v for k, v in parametros.items()})
+            puntajes = cross_val_score(estimador, X_train, y_train, cv=cv, scoring=metrica_cv, n_jobs=1, error_score=np.nan)
+            score = -np.inf if np.all(np.isnan(puntajes)) else float(np.nanmean(puntajes))
+            _avanzar(particiones)
+            if score > mejor_score:
+                mejor_score, mejores_parametros = score, parametros
+
+        final = clone(base).set_params(**{f"modelo__{k}": v for k, v in mejores_parametros.items()})
+        final.fit(X_train, y_train)
+        _avanzar(1)
+
+        y_pred = final.predict(X_test)
+        metricas = _metricas_clasificacion(y_test, y_pred) if problema == "clasificacion" else _metricas_regresion(y_test, y_pred)
+        metricas["cv"] = None if mejor_score == -np.inf else mejor_score
+        comparacion[nombre] = metricas
+        parametros_por_modelo[nombre] = dict(mejores_parametros)
+        modelos_entrenados[nombre] = final
         y_pred_por_modelo[nombre] = y_pred
 
-        if problema == "clasificacion":
-            metricas = _metricas_clasificacion(y_test, y_pred)
-            score = metricas["f1"]
-        else:
-            metricas = _metricas_regresion(y_test, y_pred)
-            score = metricas["r2"]
+        if mejor_nombre is None or mejor_score > mejor_cv:
+            mejor_nombre, mejor_cv = nombre, mejor_score
 
-        resultados_por_modelo[nombre] = metricas
-
-        if score > mejor_score:
-            mejor_nombre, mejor_score, mejor_modelo, mejor_pred = nombre, score, modelo_entrenado, y_pred
-
+    mejor = modelos_entrenados[mejor_nombre]
     return {
         "problema": problema,
-        "columnas_features": X.columns.tolist(),
+        "columnas_features": nombres_variables(mejor),
         "X_train": X_train, "X_test": X_test, "y_train": y_train, "y_test": y_test,
         "modelos_entrenados": modelos_entrenados,
-        "comparacion": resultados_por_modelo,
+        "comparacion": comparacion,
         "parametros": parametros_por_modelo,
+        "particiones": particiones,
         "mejor_modelo_nombre": mejor_nombre,
-        "mejor_modelo": mejor_modelo,
-        "y_pred": mejor_pred,
+        "mejor_modelo": mejor,
+        "y_pred": y_pred_por_modelo[mejor_nombre],
         "y_pred_por_modelo": y_pred_por_modelo,
     }
-
-
-def evaluar(problema: str, y_test, y_pred) -> dict:
-    if problema == "clasificacion":
-        return _metricas_clasificacion(y_test, y_pred)
-    return _metricas_regresion(y_test, y_pred)
 
 
 def tabla_predicciones(y_test, y_pred, problema: str, mapeo_objetivo: dict = None, limite: int = 20):

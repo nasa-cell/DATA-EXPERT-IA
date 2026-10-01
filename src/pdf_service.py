@@ -7,6 +7,7 @@ generado a partir de los datos reales, tablas y las imágenes ya generadas por
 visualization_service.py — cada gráfico en su propia sección, con su propia interpretación.
 """
 
+import io
 import os
 import re
 from datetime import datetime
@@ -113,6 +114,33 @@ def _ruta_estatica(ruta_relativa):
     return ruta if os.path.isfile(ruta) else None
 
 
+def _partir_lineas(texto, fuente, tamano, maximo):
+    """Como simpleSplit, pero una palabra más ancha que la línea (un nombre de archivo largo
+    sin espacios) se corta por letras en vez de salirse de la página."""
+    lineas = []
+    for linea in simpleSplit(texto, fuente, tamano, maximo):
+        while pdfmetrics.stringWidth(linea, fuente, tamano) > maximo and len(linea) > 1:
+            corte = len(linea)
+            while corte > 1 and pdfmetrics.stringWidth(linea[:corte], fuente, tamano) > maximo:
+                corte -= 1
+            lineas.append(linea[:corte])
+            linea = linea[corte:]
+        lineas.append(linea)
+    return lineas
+
+
+def _difuminada(ruta):
+    from PIL import Image as ImagenPIL, ImageFilter
+    with ImagenPIL.open(ruta) as imagen:
+        copia = imagen.convert("RGB")
+        copia.thumbnail((500, 500))
+        copia = copia.filter(ImageFilter.GaussianBlur(14))
+    salida = io.BytesIO()
+    copia.save(salida, format="JPEG", quality=80)
+    salida.seek(0)
+    return ImageReader(salida)
+
+
 def _portada(canvas_obj, doc, meta, fecha):
     ancho, alto = A4
     c = canvas_obj
@@ -160,7 +188,7 @@ def _portada(canvas_obj, doc, meta, fecha):
     tam = 44
     while pdfmetrics.stringWidth(nombre, F_TITULO_NEGRA, tam) > maximo and tam > 22:
         tam -= 2
-    lineas = simpleSplit(nombre, F_TITULO_NEGRA, tam, maximo)[:2]
+    lineas = _partir_lineas(nombre, F_TITULO_NEGRA, tam, maximo)[:2]
     c.setFillColor(C_TINTA)
     c.setFont(F_TITULO_NEGRA, tam)
     for linea in lineas:
@@ -194,7 +222,7 @@ def _portada(canvas_obj, doc, meta, fecha):
     cursor -= 0.9 * cm
 
     # Foto del dataset (si tiene), recortada para llenar su marco
-    foto = _ruta_estatica("static/" + str(meta["imagen"])) if meta.get("imagen") else None
+    foto = meta.get("imagen_ruta") if meta.get("imagen_ruta") and os.path.isfile(meta["imagen_ruta"]) else None
     bx, by, bw = x0 + 1 * cm, y0 + 1 * cm, w - 2 * cm
     bh = max(2.2 * cm, cursor - by)
     if foto:
@@ -205,6 +233,10 @@ def _portada(canvas_obj, doc, meta, fecha):
         camino = c.beginPath()
         camino.roundRect(bx, by, bw, bh, 0.5 * cm)
         c.clipPath(camino, stroke=0, fill=0)
+        if meta.get("portada_ajuste") == "contener":
+            # Foto muy alargada: fondo difuminado que llena el marco y la foto entera encima.
+            c.drawImage(_difuminada(foto), bx + (bw - iw * escala) / 2, by + (bh - ih * escala) / 2, iw * escala, ih * escala)
+            escala = min(bw / iw, bh / ih)
         c.drawImage(lector, bx + (bw - iw * escala) / 2, by + (bh - ih * escala) / 2, iw * escala, ih * escala)
         c.restoreState()
         c.setStrokeColor(C_TINTA)
@@ -251,6 +283,8 @@ def _interior(canvas_obj, doc, meta):
     c.setFont(F_TITULO, 8.5)
     c.drawString(2.9 * cm, alto - 1.13 * cm, "DataExpert IA")
     nombre = str(meta.get("nombre", ""))
+    if len(nombre) > 48:
+        nombre = nombre[:46].rstrip() + "…"
     c.setFont(F_TEXTO_NEGRITA, 8.5)
     ancho_n = pdfmetrics.stringWidth(nombre, F_TEXTO_NEGRITA, 8.5) + 0.7 * cm
     c.setFillColor(TEMA["pagina"])
@@ -347,10 +381,29 @@ def _tabla_kv(pares, estilos, col_izq=6.5 * cm):
     return KeepTogether([tabla])
 
 
+def _parrafo_ajustado(texto, estilo, ancho_disponible):
+    """Párrafo que nunca se sale de su celda: si una palabra o número no entra en el ancho (un
+    nombre de columna largo o una varianza de muchas cifras), se achica la letra lo necesario."""
+    texto = str(texto)
+    palabras = re.sub(r"<[^>]+>", "", texto).split() or [""]
+    mas_ancha = max(pdfmetrics.stringWidth(p, estilo.fontName, estilo.fontSize) for p in palabras)
+    if mas_ancha > ancho_disponible > 0:
+        tamano = max(5.5, estilo.fontSize * ancho_disponible / mas_ancha)
+        estilo = ParagraphStyle(f"{estilo.name}_{tamano:.1f}", parent=estilo, fontSize=tamano, leading=tamano + 3.2)
+    return Paragraph(texto, estilo)
+
+
 def _tabla_datos(encabezados, filas, estilos, anchos=None):
-    datos = [[Paragraph(f"<b>{h}</b>", estilos["th"]) for h in encabezados]]
+    if anchos is None:
+        # La primera columna (nombres) un poco más ancha; el resto en partes iguales, siempre dentro de la página.
+        primera = min(5 * cm, max(3 * cm, ANCHO_CONTENIDO * 0.26)) if len(encabezados) > 2 else ANCHO_CONTENIDO / 2
+        resto = (ANCHO_CONTENIDO - primera) / max(1, len(encabezados) - 1)
+        anchos = [primera] + [resto] * (len(encabezados) - 1)
+    relleno = 8 + 6
+    datos = [[_parrafo_ajustado(f"<b>{h}</b>", estilos["th"], anchos[i] - relleno) for i, h in enumerate(encabezados)]]
     for fila in filas:
-        datos.append([Paragraph(str(c), estilos["td_primera"] if i == 0 else estilos["td"]) for i, c in enumerate(fila)])
+        datos.append([_parrafo_ajustado(c, estilos["td_primera"] if i == 0 else estilos["td"], anchos[i] - relleno)
+                      for i, c in enumerate(fila)])
     tabla = Table(datos, colWidths=anchos, repeatRows=1)
     tabla.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), C_TINTA),
@@ -359,7 +412,7 @@ def _tabla_datos(encabezados, filas, estilos, anchos=None):
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [C_BLANCO, TEMA["tinte"]]),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     return KeepTogether([tabla])
 
@@ -408,7 +461,12 @@ def _imagen_segura(url_relativa, ancho=15 * cm, marco=True, alto_max=12 * cm):
     ruta = cfg.ruta_de_url(url_relativa)
     if ruta is None or not ruta.is_file():
         return None
-    ruta = str(ruta)
+    return _imagen_archivo(str(ruta), ancho, marco, alto_max)
+
+
+def _imagen_archivo(ruta, ancho=15 * cm, marco=True, alto_max=12 * cm):
+    if not ruta or not os.path.isfile(ruta):
+        return None
     try:
         img = Image(ruta)
         proporcion = img.drawHeight / img.drawWidth
@@ -429,6 +487,16 @@ def _imagen_segura(url_relativa, ancho=15 * cm, marco=True, alto_max=12 * cm):
         return marco_tabla
     except Exception:
         return None
+
+
+def _n(valor, decimales=2):
+    """Número para las tablas: con muchas cifras enteras se quitan decimales para que se lea bien."""
+    magnitud = abs(valor)
+    if magnitud >= 1e6:
+        decimales = 0
+    elif magnitud >= 1e4:
+        decimales = min(decimales, 1)
+    return f"{valor:.{decimales}f}"
 
 
 def _fmt_vector(v):
@@ -555,18 +623,18 @@ def _resumen_comparacion(comparacion, entrenamiento):
     if not comparacion or not entrenamiento:
         return ""
     problema = entrenamiento["problema"]
-    metrica_clave = "f1" if problema == "clasificacion" else "r2"
-    nombre_metrica = "F1-score" if problema == "clasificacion" else "R²"
-    valores = {nombre: m[metrica_clave] for nombre, m in comparacion.items()}
-    if len(valores) < 2:
+    nombre_metrica = "F1 macro" if problema == "clasificacion" else "R²"
+    valores = {nombre: m.get("cv") for nombre, m in comparacion.items() if m.get("cv") is not None}
+    mejor_nombre = entrenamiento["mejor_modelo_nombre"]
+    if len(valores) < 2 or mejor_nombre not in valores:
         return ""
-    ordenados = sorted(valores.items(), key=lambda t: t[1], reverse=True)
-    mejor, segundo = ordenados[0], ordenados[1]
-    diferencia = mejor[1] - segundo[1]
+    segundo = max(((n, v) for n, v in valores.items() if n != mejor_nombre), key=lambda t: t[1])
     return (
-        f"<b>{mejor[0]}</b> obtuvo el mejor desempeño según {nombre_metrica} ({mejor[1]:.3f} frente a "
-        f"{segundo[1]:.3f} de {segundo[0]}, una diferencia de {diferencia:.3f}), por lo que fue elegido como "
-        "el modelo final para este dataset."
+        f"<b>{mejor_nombre}</b> obtuvo la mejor puntuación de validación cruzada ({nombre_metrica} {valores[mejor_nombre]:.3f} "
+        f"frente a {segundo[1]:.3f} de {segundo[0]}), medida solo con los datos de entrenamiento, por lo que fue "
+        "elegido como el modelo final. Las métricas de la tabla se calcularon después sobre los datos de prueba, "
+        "que ningún modelo vio al aprender ni al elegirse: por eso son una estimación honesta de cómo le iría con "
+        "datos nuevos."
     )
 
 
@@ -619,7 +687,7 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
         "h1": ParagraphStyle("H1", parent=base["Heading1"], fontName=F_TITULO_NEGRA, fontSize=17, leading=21, textColor=C_TINTA, spaceAfter=0),
         "insignia": ParagraphStyle("Insignia", fontName=F_TITULO_NEGRA, fontSize=12, leading=14, textColor=C_TINTA, alignment=1),
         "h2": ParagraphStyle("H2", parent=base["Heading2"], fontName=F_TITULO, fontSize=10.5, leading=14, textColor=C_TINTA, spaceBefore=0, spaceAfter=0),
-        "body": ParagraphStyle("Body", parent=base["BodyText"], fontName=F_TEXTO, fontSize=10, leading=15.2, textColor=C_TINTA, spaceAfter=6),
+        "body": ParagraphStyle("Body", parent=base["BodyText"], fontName=F_TEXTO, fontSize=10, leading=15.2, textColor=C_TINTA, spaceAfter=6, allowWidows=0, allowOrphans=0),
         "kv_label": ParagraphStyle("KVLabel", fontName=F_TEXTO_NEGRITA, fontSize=9.3, leading=13, textColor=C_TINTA),
         "kv_valor": ParagraphStyle("KVValor", fontName=F_TEXTO, fontSize=9.3, leading=13, textColor=C_TINTA),
         "th": ParagraphStyle("TH", fontName=F_TEXTO_NEGRITA, fontSize=8.8, leading=12, textColor=C_BLANCO),
@@ -691,7 +759,7 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
 
     # --- 2. Dataset seleccionado ---
     story.extend(_seccion("2. Dataset seleccionado", estilos))
-    imagen_dataset = _imagen_segura(f"static/{meta.get('imagen', '')}", ancho=8 * cm, alto_max=7.5 * cm)
+    imagen_dataset = _imagen_archivo(meta.get("imagen_ruta"), ancho=8 * cm, alto_max=7.5 * cm)
     if imagen_dataset:
         story.append(imagen_dataset)
         story.append(Spacer(1, 0.2 * cm))
@@ -823,7 +891,7 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
             f"Sistema de ecuaciones lineales: {sistema['descripcion'][0]}, {sistema['descripcion'][1]}. "
             f"Resolviéndolo con <i>np.linalg.solve</i> se obtiene la solución "
             f"x = {sistema['solucion']['x']:.3f}, y = {sistema['solucion']['y']:.3f}. La verificación "
-            f"consiste en sustituir esa solución en el sistema original (A·x = {sistema['verificacion']}) y "
+            f"consiste en sustituir esa solución en el sistema original (A·x = {_fmt_vector(sistema['verificacion'])}) y "
             "comprobar que coincide con el vector b original, confirmando que la solución es correcta.",
             estilos["body"],
         ))
@@ -842,9 +910,9 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
         ))
         story.append(Spacer(1, 0.15 * cm))
         filas = [
-            (c["columna"], f"{c['media']:.2f}", f"{c['mediana']:.2f}",
-             f"{c['varianza_numpy']:.3f}", f"{c['varianza_manual']:.3f}",
-             f"{c['desviacion_numpy']:.3f}", f"{c['desviacion_manual']:.3f}")
+            (c["columna"], _n(c["media"]), _n(c["mediana"]),
+             _n(c["varianza_numpy"], 3), _n(c["varianza_manual"], 3),
+             _n(c["desviacion_numpy"], 3), _n(c["desviacion_manual"], 3))
             for c in estadistica["columnas"]
         ]
         story.append(_tabla_datos(
@@ -873,8 +941,8 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
         ))
         story.append(Spacer(1, 0.15 * cm))
         filas = [
-            (c["columna"], f"{c['media']:.2f}", f"{c['desviacion_estandar']:.2f}",
-             f"{c['limite_inferior']:.2f}", f"{c['limite_superior']:.2f}", c["cantidad_outliers"])
+            (c["columna"], _n(c["media"]), _n(c["desviacion_estandar"]),
+             _n(c["limite_inferior"]), _n(c["limite_superior"]), c["cantidad_outliers"])
             for c in outliers["columnas"]
         ]
         story.append(_tabla_datos(
@@ -933,15 +1001,17 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
             f"Tipo de problema detectado automáticamente: <b>{_fmt_problema(entrenamiento['problema'])}</b>. "
             "Se separaron los datos en 80% para entrenamiento y 20% para prueba "
             f"(<i>train_test_split</i>, random_state=42), y se compararon {texto_cantidad} modelos de "
-            f"Scikit-learn ({', '.join(nombres_modelos)}) entrenados sobre el mismo conjunto. El de mejor "
-            f"desempeño fue <b>{entrenamiento['mejor_modelo_nombre']}</b>.",
+            f"Scikit-learn ({', '.join(nombres_modelos)}) entrenados sobre el mismo conjunto. Cada modelo "
+            "rellena huecos, codifica y escala los datos aprendiendo solo de la parte de entrenamiento, para "
+            "que la parte de prueba no influya en nada. El elegido por validación cruzada fue "
+            f"<b>{entrenamiento['mejor_modelo_nombre']}</b>.",
             estilos["body"],
         ))
 
         params_mejor = parametros_modelos.get(entrenamiento["mejor_modelo_nombre"])
         if params_mejor:
             texto_params = ", ".join(f"{clave} = {valor}" for clave, valor in params_mejor.items())
-            particiones = 10 if entrenamiento["problema"] == "clasificacion" else 5
+            particiones = entrenamiento.get("particiones") or (10 if entrenamiento["problema"] == "clasificacion" else 5)
             story.append(Paragraph(
                 "Sus \"hiperparámetros\" (ajustes que se eligen antes de entrenar, no algo que el modelo "
                 "aprenda solo) no se fijaron a mano: se probaron varias configuraciones distintas, cada una "

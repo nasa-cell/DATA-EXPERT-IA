@@ -3,23 +3,53 @@
  * Cada botón llama a un endpoint real del servidor y renderiza el resultado devuelto.
  */
 
-function mostrarToast(mensaje, tipo = "info") {
+function mostrarToast(mensaje, tipo = "info", enlace = null) {
     const contenedor = document.getElementById("toast-contenedor");
     if (!contenedor) return;
     const toast = document.createElement("div");
     toast.className = `toast toast-${tipo}`;
     toast.textContent = mensaje;
+    if (enlace) {
+        const a = document.createElement("a");
+        a.className = "toast-enlace";
+        a.href = enlace.url;
+        a.textContent = enlace.texto;
+        toast.appendChild(a);
+    }
     contenedor.appendChild(toast);
     requestAnimationFrame(() => toast.classList.add("mostrar"));
     setTimeout(() => {
         toast.classList.remove("mostrar");
         setTimeout(() => toast.remove(), 220);
-    }, 3600);
+    }, enlace ? 9000 : 3600);
 }
 
 function num(valor, decimales = 2) {
     if (valor === null || valor === undefined || Number.isNaN(valor)) return "—";
     return Number(valor).toFixed(decimales);
+}
+
+function entero(valor) {
+    return Number.isFinite(valor) ? Number(valor).toLocaleString("es-ES") : valor;
+}
+
+/**
+ * Achica la letra de un valor de tarjeta hasta que entre en su ancho (números de muchas
+ * cifras, nombres de modelo largos), en vez de partirlo o salirse de la tarjeta.
+ */
+function ajustarTamano(elemento) {
+    elemento.style.fontSize = "";
+    let tamano = parseFloat(getComputedStyle(elemento).fontSize);
+    const minimo = 11;
+    const noCabe = () => elemento.scrollWidth > elemento.clientWidth + 1 || elemento.scrollHeight > elemento.clientHeight * 2.4;
+    while (noCabe() && tamano > minimo) {
+        tamano -= 1;
+        elemento.style.fontSize = `${tamano}px`;
+    }
+}
+
+function ajustarTarjetas(raiz = document) {
+    raiz.querySelectorAll(".tarjeta-metrica .valor, .metrica-tarjeta .valor").forEach(ajustarTamano);
 }
 
 function pct(valor, decimales = 2) {
@@ -90,10 +120,10 @@ async function actualizarResumen() {
         if (!data.ok) return;
 
         const valores = {
-            registros: data.registros,
-            variables: data.variables,
-            nulos: data.nulos,
-            outliers: data.outliers ?? "—",
+            registros: entero(data.registros),
+            variables: entero(data.variables),
+            nulos: entero(data.nulos),
+            outliers: data.outliers === null || data.outliers === undefined ? "—" : entero(data.outliers),
             modelo: data.modelo ?? "—",
             metrica: data.metricas
                 ? (data.problema === "clasificacion" ? pct(data.metricas.accuracy) : num(data.metricas.r2, 3))
@@ -107,6 +137,7 @@ async function actualizarResumen() {
             tarjeta.classList.remove("actualizada");
             void tarjeta.offsetWidth; // reinicia la animación de destello
             tarjeta.classList.add("actualizada");
+            ajustarTamano(tarjeta.querySelector(".valor"));
         });
     } catch (e) { /* silencioso: el resumen es un plus, no bloquea el flujo */ }
 }
@@ -273,13 +304,14 @@ function renderEntrenar(d) {
         } else {
             base.push(num(m.mae, 3), num(m.rmse, 3), num(m.r2, 3));
         }
+        base.push(m.cv === null || m.cv === undefined ? "—" : num(m.cv, 3));
         base.push(formatoParametros(parametros[nombre]));
         return base;
     });
 
     const encabezados = (d.problema === "clasificacion"
         ? ["Modelo", "Accuracy", "Precision", "Recall", "F1-score"]
-        : ["Modelo", "MAE", "RMSE", "R²"]).concat(["Mejor configuración encontrada"]);
+        : ["Modelo", "MAE", "RMSE", "R²"]).concat([d.problema === "clasificacion" ? "Validación cruzada (F1)" : "Validación cruzada (R²)", "Mejor configuración encontrada"]);
 
     const modelos = d.modelos_disponibles || Object.keys(d.comparacion);
     const menuModelos = `
@@ -355,7 +387,8 @@ function renderEntrenar(d) {
                 Antes de compararlos, cada modelo se probó con varias configuraciones distintas (sus
                 "hiperparámetros": ajustes que se eligen antes de entrenar, no algo que el modelo aprenda
                 solo), usando siempre datos de entrenamiento — nunca los de prueba — para elegir cuál
-                configuración funcionó mejor.
+                configuración funcionó mejor. El mejor modelo (★) es el de mayor puntuación en esa
+                validación cruzada; las demás columnas miden cómo le fue después con los datos de prueba.
             </p>
             ${menuModelos}
             <div id="vista-comparacion">
@@ -516,9 +549,9 @@ function renderPdf(d) {
         <div class="resultado-bloque">
             <h3>${icono("pdf")}Informe PDF</h3>
             <p>${escapar(d.mensaje)}</p>
-            <a class="boton boton-primario" href="/ver-pdf" target="_blank" rel="noopener">Ver informe PDF</a>
+            <a class="boton boton-primario" href="${escapar(d.ver_url)}" target="_blank" rel="noopener">Ver informe PDF</a>
             &nbsp;
-            <a class="boton boton-fantasma" href="/descargar-pdf">Descargar</a>
+            <a class="boton boton-fantasma" href="${escapar(d.descargar_url)}">Descargar</a>
         </div>`;
 }
 
@@ -545,16 +578,214 @@ const ENDPOINTS = {
     pdf: "/generar-pdf",
 };
 
+// ---------------------------------------------------------------------------
+// Pasos ya calculados: se guardan en el servidor por dataset. Al volver a la página (o al
+// pulsar un paso ya hecho) se muestran tal cual, sin recalcular; "Volver a calcular" lo repite.
+// ---------------------------------------------------------------------------
+
+const RESPUESTAS = {};
+
+function botonDe(accion) {
+    return document.querySelector(`.boton-accion[data-accion="${accion}"]`);
+}
+
+function claveUltimoPaso() {
+    return `dataexpert:ultimo-paso:${window.DATASET_ACTUAL}`;
+}
+
+function recordarPaso(accion) {
+    try { localStorage.setItem(claveUltimoPaso(), accion); } catch (e) { /* sin almacenamiento: no pasa nada */ }
+}
+
+function pasoRecordado() {
+    try { return localStorage.getItem(claveUltimoPaso()); } catch (e) { return null; }
+}
+
+function sincronizarPasos(respuestas) {
+    Object.keys(RESPUESTAS).forEach((clave) => delete RESPUESTAS[clave]);
+    Object.assign(RESPUESTAS, respuestas || {});
+    document.querySelectorAll(".boton-accion").forEach((b) => b.classList.toggle("hecho", Boolean(RESPUESTAS[b.dataset.accion])));
+    actualizarAvance();
+}
+
+async function recargarEstado() {
+    try {
+        const respuesta = await fetch("/api/estado");
+        const data = await respuesta.json();
+        if (data.ok) sincronizarPasos(data.respuestas);
+        return data;
+    } catch (e) {
+        return null;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Procesos que siguen en el servidor aunque se cambie de página: cualquier página pregunta
+// qué está corriendo, muestra un aviso flotante mientras tanto y avisa cuando termina (con
+// un enlace para volver al dataset). La página que lanzó el paso ya lo muestra ella misma.
+// ---------------------------------------------------------------------------
+
+const EN_CURSO_AQUI = new Set();
+const NOMBRES_PASO = {
+    explorar: "Explorar datos", preprocesar: "Preprocesar", algebra: "Álgebra lineal",
+    estadistica: "Estadística", outliers: "Valores atípicos", graficos: "Gráficos",
+    entrenar: "Entrenamiento", evaluar: "Evaluación", pdf: "Informe PDF",
+};
+const CLAVE_VISTO = `dataexpert:actividad-vista:${window.ARRANQUE || ""}`;
+let vistoEnMemoria = null;
+let vigilando = false;
+
+function leerVisto() {
+    try {
+        const valor = localStorage.getItem(CLAVE_VISTO);
+        if (valor !== null) return Number(valor);
+    } catch (e) { /* sin almacenamiento: se usa la memoria de esta página */ }
+    return vistoEnMemoria ?? 0;
+}
+
+function marcarVisto(secuencia) {
+    if (!secuencia) return;
+    if (secuencia <= leerVisto()) return;
+    vistoEnMemoria = secuencia;
+    try { localStorage.setItem(CLAVE_VISTO, String(secuencia)); } catch (e) { /* idem */ }
+}
+
+function esperar(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function avisoFlotante(procesos) {
+    let aviso = document.getElementById("aviso-actividad");
+    const ajenos = procesos.filter((p) => !(p.dataset === window.DATASET_ACTUAL && EN_CURSO_AQUI.has(p.accion)));
+    if (!ajenos.length) {
+        if (aviso) aviso.remove();
+        return;
+    }
+    if (!aviso) {
+        aviso = document.createElement("a");
+        aviso.id = "aviso-actividad";
+        aviso.className = "aviso-actividad";
+        document.body.appendChild(aviso);
+    }
+    const p = ajenos[0];
+    const pct = p.pct !== undefined ? ` (${p.pct}%)` : "";
+    aviso.href = p.url;
+    aviso.innerHTML = `<span class="spinner"></span><span>Calculando ${escapar(NOMBRES_PASO[p.accion] || p.accion)} de «${escapar(p.nombre_dataset)}»${pct}${ajenos.length > 1 ? ` y ${ajenos.length - 1} más` : ""}… te aviso al terminar</span>`;
+}
+
+function marcarProcesosRemotos(activos) {
+    document.querySelectorAll(".boton-accion").forEach((boton) => {
+        const accion = boton.dataset.accion;
+        if (EN_CURSO_AQUI.has(accion)) return;
+        const remoto = activos.some((p) => p.dataset === window.DATASET_ACTUAL && p.accion === accion);
+        boton.classList.toggle("cargando", remoto);
+    });
+}
+
+async function alTerminarAqui(evento) {
+    const boton = botonDe(evento.accion);
+    if (boton) boton.classList.remove("cargando");
+    await recargarEstado();
+    actualizarResumen();
+    const panel = document.getElementById("panel-resultado");
+    if (panel && panel.dataset.esperando === evento.accion) {
+        delete panel.dataset.esperando;
+        if (evento.ok && RESPUESTAS[evento.accion]) mostrarGuardado(evento.accion, boton);
+        else panel.innerHTML = `<div class="resultado-bloque"><p style="color: var(--rojo);">${escapar(evento.error || "No se pudo completar")}</p></div>`;
+    }
+    mostrarToast(evento.ok ? `✓ ${NOMBRES_PASO[evento.accion]} terminado` : `⚠ ${NOMBRES_PASO[evento.accion]}: ${evento.error}`, evento.ok ? "exito" : "error");
+}
+
+async function vigilarActividad() {
+    if (vigilando) return;
+    vigilando = true;
+    try {
+        for (;;) {
+            let data;
+            try {
+                data = await (await fetch("/api/actividad")).json();
+            } catch (e) {
+                break;
+            }
+            if (!data.ok) break;
+            const visto = leerVisto();
+
+            for (const evento of data.terminados) {
+                if (evento.secuencia <= visto) continue;
+                marcarVisto(evento.secuencia);
+                const esAqui = window.DATASET_ACTUAL === evento.dataset;
+                if (esAqui && EN_CURSO_AQUI.has(evento.accion)) continue;
+                if (esAqui) {
+                    await alTerminarAqui(evento);
+                } else {
+                    const texto = evento.ok
+                        ? `✓ ${NOMBRES_PASO[evento.accion]} de «${evento.nombre_dataset}» terminado.`
+                        : `⚠ ${NOMBRES_PASO[evento.accion]} de «${evento.nombre_dataset}» no se pudo completar: ${evento.error}`;
+                    mostrarToast(texto, evento.ok ? "exito" : "error", { url: evento.url, texto: "Volver a ese dataset" });
+                }
+            }
+
+            avisoFlotante(data.activos);
+            marcarProcesosRemotos(data.activos);
+            if (!data.activos.length) break;
+            await esperar(1500);
+        }
+    } finally {
+        vigilando = false;
+    }
+}
+
+async function reiniciarAnalisis() {
+    const nombre = document.querySelector(".panel-dataset-info h1")?.textContent || "este dataset";
+    if (!window.confirm(`¿Reiniciar todo el análisis de «${nombre}»?\n\nSe borra lo calculado (pasos, modelos e informe PDF) para empezar de nuevo. El dataset y su portada no se borran.`)) return;
+    try {
+        const respuesta = await fetch("/api/reiniciar", { method: "POST" });
+        const data = await respuesta.json();
+        if (!data.ok) {
+            mostrarToast(data.error || "No se pudo reiniciar", "error");
+            return;
+        }
+        try { localStorage.removeItem(claveUltimoPaso()); } catch (e) { /* idem */ }
+        sincronizarPasos({});
+        document.querySelectorAll(".boton-accion.activo").forEach((b) => b.classList.remove("activo"));
+        document.getElementById("panel-resultado").innerHTML =
+            `<p class="placeholder">Análisis reiniciado. Elige un paso del flujo para empezar de nuevo.</p>`;
+        actualizarResumen();
+        mostrarToast("✓ Análisis reiniciado", "exito");
+    } catch (e) {
+        mostrarToast("Error de conexión con el servidor", "error");
+    }
+}
+
+function mostrarGuardado(accion, boton) {
+    const panel = document.getElementById("panel-resultado");
+    marcarActivo(boton);
+    panel.innerHTML = `
+        <div class="aviso-guardado">
+            <span>${icono("check")}Resultado guardado: se muestra sin volver a calcular.</span>
+            <button type="button" class="boton boton-fantasma boton-recalcular" data-recalcular="${escapar(accion)}">${icono("recalcular")}Volver a calcular</button>
+        </div>
+        ${RENDERERS[accion](RESPUESTAS[accion])}`;
+    recordarPaso(accion);
+}
+
+function ejecutar(accion, boton) {
+    if (accion === "entrenar") ejecutarEntrenamiento(boton);
+    else ejecutarAccion(accion, boton);
+}
+
 /**
  * "Entrenar modelo" no es un fetch único: arranca la búsqueda de hiperparámetros en el
  * servidor (que corre en un hilo aparte) y va preguntando el avance cada 300ms para
- * mostrar una barra de progreso con el porcentaje EXACTO (pasos hechos / pasos totales,
- * calculados de antemano a partir del tamaño real de la grilla), no un valor inventado.
+ * mostrar una barra de progreso con el porcentaje EXACTO (pasos hechos / pasos totales).
+ * Si se sale de la página mientras entrena, al volver se retoma la barra donde iba.
  */
-async function ejecutarEntrenamiento(boton) {
+async function ejecutarEntrenamiento(boton, yaEnCurso = false) {
     const panel = document.getElementById("panel-resultado");
+    EN_CURSO_AQUI.add("entrenar");
     marcarActivo(boton);
     setCargando(boton, true);
+    recordarPaso("entrenar");
     panel.innerHTML = `
         <div class="resultado-bloque">
             <h3>${icono("entrenar")}Entrenando modelos…</h3>
@@ -569,9 +800,11 @@ async function ejecutarEntrenamiento(boton) {
     let intervalo = null;
 
     try {
-        const inicio = await fetch("/api/entrenar/iniciar");
-        const dataInicio = await inicio.json();
-        if (!dataInicio.ok) throw new Error(dataInicio.error || "Ocurrió un error");
+        if (!yaEnCurso) {
+            const inicio = await fetch("/api/entrenar/iniciar");
+            const dataInicio = await inicio.json();
+            if (!dataInicio.ok) throw new Error(dataInicio.error || "Ocurrió un error");
+        }
 
         await new Promise((resolve, reject) => {
             intervalo = setInterval(async () => {
@@ -581,12 +814,17 @@ async function ejecutarEntrenamiento(boton) {
                     if (!data.ok) throw new Error(data.error || "Ocurrió un error");
 
                     if (relleno) relleno.style.width = `${data.pct}%`;
-                    if (texto) texto.textContent = `${data.hecho} / ${data.total} combinaciones probadas (${data.pct}%)`;
+                    if (texto) {
+                        texto.textContent = data.total
+                            ? `${data.hecho} / ${data.total} combinaciones probadas (${data.pct}%)`
+                            : "Preparando los datos...";
+                    }
 
                     if (data.listo) {
                         clearInterval(intervalo);
-                        panel.innerHTML = RENDERERS.entrenar(data);
-                        marcarHecho(boton);
+                        marcarVisto(data.secuencia);
+                        await recargarEstado();
+                        if (document.body.contains(relleno)) panel.innerHTML = RENDERERS.entrenar(data);
                         mostrarToast("✓ Modelos entrenados", "exito");
                         actualizarResumen();
                         resolve();
@@ -603,16 +841,21 @@ async function ejecutarEntrenamiento(boton) {
         panel.innerHTML = `<div class="resultado-bloque"><p style="color: var(--rojo);">${escapar(e.message || "Error de conexión")}</p></div>`;
     } finally {
         setCargando(boton, false);
+        EN_CURSO_AQUI.delete("entrenar");
+        vigilarActividad();
     }
 }
 
 async function ejecutarAccion(accion, boton) {
     const panel = document.getElementById("panel-resultado");
+    EN_CURSO_AQUI.add(accion);
     marcarActivo(boton);
     setCargando(boton, true);
+    recordarPaso(accion);
     try {
         const respuesta = await fetch(ENDPOINTS[accion]);
         const data = await respuesta.json();
+        marcarVisto(data.secuencia);
 
         if (!data.ok) {
             mostrarToast(data.error || "Ocurrió un error", "error");
@@ -622,16 +865,75 @@ async function ejecutarAccion(accion, boton) {
 
         const render = RENDERERS[accion];
         panel.innerHTML = render ? render(data) : "<p>Sin renderer para esta acción.</p>";
-        marcarHecho(boton);
+        recordarPaso(accion);
+        await recargarEstado();
         mostrarToast("✓ Análisis completado", "exito");
-
-        if (["outliers", "evaluar"].includes(accion)) {
-            actualizarResumen();
-        }
+        actualizarResumen();
     } catch (e) {
         mostrarToast("Error de conexión con el servidor", "error");
     } finally {
         setCargando(boton, false);
+        EN_CURSO_AQUI.delete(accion);
+    }
+}
+
+async function cambiarColor(color) {
+    try {
+        const respuesta = await fetch(`/api/dataset/${encodeURIComponent(window.DATASET_ACTUAL)}/color`, {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ color }),
+        });
+        const data = await respuesta.json();
+        if (!data.ok) {
+            mostrarToast(data.error || "No se pudo cambiar el color", "error");
+            return;
+        }
+        document.body.style.setProperty("--tema-a", data.color_a);
+        document.body.style.setProperty("--tema-b", data.color_b);
+        document.querySelectorAll(".muestra-color").forEach((m) => m.classList.toggle("activa", m.dataset.color === data.color_a));
+        const personal = document.querySelector(".muestra-personal");
+        if (personal && !document.querySelector(`.muestra-color[data-color="${data.color_a}"]`)) {
+            personal.classList.add("activa");
+            personal.style.setProperty("--muestra", data.color_a);
+        }
+        document.querySelectorAll(`.cambiar-lista a[href$="/${window.DATASET_ACTUAL}"]`).forEach((a) => a.style.setProperty("--tema-a", data.color_a));
+        await recargarEstado();
+        mostrarToast("✓ Color guardado (también se usa en el informe PDF)", "exito");
+    } catch (e) {
+        mostrarToast("Error de conexión con el servidor", "error");
+    }
+}
+
+async function subirPortada(archivo) {
+    const boton = document.getElementById("boton-portada");
+    const form = new FormData();
+    form.append("portada", archivo);
+    boton.disabled = true;
+    try {
+        const respuesta = await fetch(`/api/dataset/${encodeURIComponent(window.DATASET_ACTUAL)}/portada`, { method: "POST", body: form });
+        const data = await respuesta.json();
+        if (!data.ok) {
+            mostrarToast(data.error || "No se pudo guardar la portada", "error");
+            return;
+        }
+        let imagen = document.getElementById("imagen-portada");
+        if (!imagen) {
+            imagen = document.createElement("img");
+            imagen.id = "imagen-portada";
+            imagen.alt = "";
+            document.getElementById("zona-portada").prepend(imagen);
+        }
+        imagen.src = data.imagen_url;
+        const zona = document.getElementById("zona-portada");
+        zona.style.setProperty("--foto", `url("${data.imagen_url}")`);
+        zona.classList.toggle("foto-contener", data.ajuste === "contener");
+        boton.innerHTML = `${icono("subir")}Cambiar portada`;
+        await recargarEstado();
+        if (data.aviso) mostrarToast(data.aviso, "info");
+        else mostrarToast("✓ Portada guardada (también sale en el informe PDF)", "exito");
+    } catch (e) {
+        mostrarToast("Error de conexión con el servidor", "error");
+    } finally {
+        boton.disabled = false;
     }
 }
 
@@ -689,17 +991,23 @@ async function verModeloEnMenu(boton) {
 document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".boton-accion").forEach((boton) => {
         boton.addEventListener("click", () => {
-            if (boton.dataset.accion === "entrenar") {
-                ejecutarEntrenamiento(boton);
-            } else {
-                ejecutarAccion(boton.dataset.accion, boton);
-            }
+            if (boton.classList.contains("cargando")) return;
+            const accion = boton.dataset.accion;
+            if (RESPUESTAS[accion]) mostrarGuardado(accion, boton);
+            else ejecutar(accion, boton);
         });
     });
 
     const panelResultado = document.getElementById("panel-resultado");
     if (panelResultado) {
         panelResultado.addEventListener("click", (evento) => {
+            const botonRecalcular = evento.target.closest(".boton-recalcular");
+            if (botonRecalcular) {
+                const accion = botonRecalcular.dataset.recalcular;
+                ejecutar(accion, botonDe(accion));
+                return;
+            }
+
             const botonTab = evento.target.closest(".boton-tab");
             if (botonTab) { verModeloEnMenu(botonTab); return; }
 
@@ -711,7 +1019,53 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    // Las tarjetas de métricas se ajustan cada vez que el panel cambia y al cambiar el tamaño de la ventana.
+    if (panelResultado) new MutationObserver(() => ajustarTarjetas(panelResultado)).observe(panelResultado, { childList: true, subtree: true });
+    let esperaAjuste = null;
+    window.addEventListener("resize", () => {
+        clearTimeout(esperaAjuste);
+        esperaAjuste = setTimeout(() => ajustarTarjetas(), 120);
+    });
+
+    document.querySelectorAll(".muestra-color[data-color]").forEach((muestra) => {
+        muestra.addEventListener("click", () => cambiarColor(muestra.dataset.color));
+    });
+    const colorPersonal = document.getElementById("color-personal");
+    if (colorPersonal) colorPersonal.addEventListener("change", () => cambiarColor(colorPersonal.value));
+
+    const inputPortada = document.getElementById("input-portada");
+    if (inputPortada) {
+        document.getElementById("boton-portada").addEventListener("click", () => inputPortada.click());
+        inputPortada.addEventListener("change", () => {
+            if (inputPortada.files[0]) subirPortada(inputPortada.files[0]);
+            inputPortada.value = "";
+        });
+    }
+
     if (document.getElementById("resumen-tarjetas")) {
         actualizarResumen();
+        // Recupera lo ya calculado para este dataset y vuelve a mostrar el último paso visto.
+        const botonReiniciar = document.getElementById("boton-reiniciar");
+        if (botonReiniciar) botonReiniciar.addEventListener("click", reiniciarAnalisis);
+
+        recargarEstado().then((data) => {
+            if (!data || !data.ok) return;
+            const enCurso = data.en_curso || [];
+            enCurso.forEach((accion) => { if (botonDe(accion)) botonDe(accion).classList.add("cargando"); });
+            const ultimo = pasoRecordado();
+            if (enCurso.includes("entrenar") && (ultimo === "entrenar" || !RESPUESTAS[ultimo])) {
+                ejecutarEntrenamiento(botonDe("entrenar"), true);
+            } else if (ultimo && enCurso.includes(ultimo) && botonDe(ultimo)) {
+                const panel = document.getElementById("panel-resultado");
+                marcarActivo(botonDe(ultimo));
+                panel.dataset.esperando = ultimo;
+                panel.innerHTML = `<div class="resultado-bloque"><p class="placeholder"><span class="spinner"></span> Se sigue calculando «${escapar(NOMBRES_PASO[ultimo])}»… aparecerá aquí al terminar.</p></div>`;
+            } else if (ultimo && RESPUESTAS[ultimo] && botonDe(ultimo)) {
+                mostrarGuardado(ultimo, botonDe(ultimo));
+            }
+            vigilarActividad();
+        });
+    } else {
+        vigilarActividad();
     }
 });

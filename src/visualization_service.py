@@ -9,6 +9,7 @@ para que el informe PDF pueda mostrar cada uno en su propia sección con context
 
 import os
 import re
+import threading
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -21,6 +22,9 @@ from src import configuracion as cfg
 
 
 GRAFICOS_DIR = str(cfg.GRAFICOS_DIR)
+# Matplotlib (pyplot) no admite dibujar desde dos hilos a la vez: quien genere gráficos mientras
+# otro paso puede estar corriendo (por ejemplo, el entrenamiento en segundo plano) usa este cerrojo.
+BLOQUEO = threading.Lock()
 
 # Paleta categórica validada (contraste y daltonismo) y el mismo estilo que la página: tinta oscura, ejes limpios y rejilla suave.
 PALETA = ["#e8590c", "#6c4dff", "#12a06a", "#0a84d6", "#d6336c", "#00a3a3", "#b58900"]
@@ -417,10 +421,12 @@ def generar_importancia_variables(modelo, columnas_features: list, dataset: str,
     return {"url": _url(dataset, nombre), "explicacion": explicacion, "disponible": True}
 
 
-def generar_matriz_confusion(y_test, y_pred, etiquetas, dataset: str) -> str:
+def generar_matriz_confusion(y_test, y_pred, clases, etiquetas, dataset: str, modelo: str = "") -> str:
+    """`clases` son los valores reales (0, 1, 2...) en el orden de `etiquetas` (sus nombres): así la
+    matriz siempre tiene una fila y una columna por clase, aunque alguna no aparezca en la prueba."""
     from sklearn.metrics import confusion_matrix
 
-    matriz = confusion_matrix(y_test, y_pred)
+    matriz = confusion_matrix(y_test, y_pred, labels=clases)
     fig, ax = plt.subplots(figsize=(5.8, 5.0))
     sns.heatmap(
         matriz, annot=True, fmt="d", cmap=_CMAP_SECUENCIAL, linewidths=1.5, linecolor="#14112b", xticklabels=etiquetas, yticklabels=etiquetas, ax=ax
@@ -429,13 +435,13 @@ def generar_matriz_confusion(y_test, y_pred, etiquetas, dataset: str) -> str:
     ax.set_ylabel("Valor real")
     ax.set_title("Matriz de confusión")
     fig.tight_layout()
-    nombre = "matriz_confusion.png"
+    nombre = f"matriz_confusion_{_slug(modelo)}.png" if modelo else "matriz_confusion.png"
     fig.savefig(_ruta(dataset, nombre), dpi=130)
     plt.close(fig)
     return _url(dataset, nombre)
 
 
-def generar_comparacion_regresion(y_test, y_pred, dataset: str) -> str:
+def generar_comparacion_regresion(y_test, y_pred, dataset: str, modelo: str = "") -> str:
     fig, ax = plt.subplots(figsize=(6.4, 5.6))
     ax.scatter(y_test, y_pred, alpha=0.6, color=PALETA[0])
     minimo, maximo = min(y_test.min(), y_pred.min()), max(y_test.max(), y_pred.max())
@@ -445,7 +451,7 @@ def generar_comparacion_regresion(y_test, y_pred, dataset: str) -> str:
     ax.set_title("Real vs. predicho")
     ax.legend()
     fig.tight_layout()
-    nombre = "real_vs_prediccion.png"
+    nombre = f"real_vs_prediccion_{_slug(modelo)}.png" if modelo else "real_vs_prediccion.png"
     fig.savefig(_ruta(dataset, nombre), dpi=130)
     plt.close(fig)
     return _url(dataset, nombre)

@@ -1,7 +1,8 @@
 /**
  * Página "Subir dataset": lee el archivo (CSV/Excel), muestra una vista previa donde el
- * usuario elige a mano qué columnas usar (amarillo) y cuál es el objetivo (azul), y confirma
- * para que el servidor arme el dataset y lo mande al mismo dashboard que cualquier otro.
+ * usuario elige a mano qué columnas usar (amarillo) y cuál es el objetivo (azul), puede elegir
+ * una foto de portada, y confirma para que el servidor guarde el dataset y lo mande al mismo
+ * dashboard que cualquier otro.
  *
  * Usa `mostrarToast` y `escapar`, ya definidos globalmente en app.js (cargado antes que este
  * script desde base.html).
@@ -21,8 +22,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const avisoPocasFilas = document.getElementById("aviso-pocas-filas");
     const botonConfirmar = document.getElementById("boton-confirmar-subida");
 
+    const inputPortada = document.getElementById("input-portada-subida");
+    const zonaPortada = document.getElementById("zona-portada-subida");
+    const vistaPortada = document.getElementById("vista-portada-subida");
+    const nombrePortada = document.getElementById("nombre-portada-elegida");
+
     let columnaObjetivo = null;
     let datosSubida = null;
+    let portadaElegida = null;
+
+    // Foto de portada opcional: se muestra al momento y se envía después de confirmar el dataset.
+    zonaPortada.addEventListener("click", () => inputPortada.click());
+    zonaPortada.addEventListener("keydown", (e) => { if (e.key === "Enter") inputPortada.click(); });
+    ["dragenter", "dragover"].forEach((ev) => zonaPortada.addEventListener(ev, (e) => {
+        e.preventDefault(); zonaPortada.classList.add("arrastrando");
+    }));
+    ["dragleave", "drop"].forEach((ev) => zonaPortada.addEventListener(ev, (e) => {
+        e.preventDefault(); zonaPortada.classList.remove("arrastrando");
+    }));
+    zonaPortada.addEventListener("drop", (e) => {
+        if (e.dataTransfer.files.length) elegirPortada(e.dataTransfer.files[0]);
+    });
+    inputPortada.addEventListener("change", () => {
+        if (inputPortada.files[0]) elegirPortada(inputPortada.files[0]);
+    });
+
+    function elegirPortada(archivo) {
+        if (!/\.(jpe?g|png|webp)$/i.test(archivo.name)) {
+            mostrarToast("La portada debe ser una imagen .jpg, .png o .webp", "error");
+            return;
+        }
+        if (archivo.size > 8 * 1024 * 1024) {
+            mostrarToast("La imagen pesa más de 8 MB", "error");
+            return;
+        }
+        portadaElegida = archivo;
+        nombrePortada.textContent = archivo.name;
+        vistaPortada.src = URL.createObjectURL(archivo);
+        vistaPortada.hidden = false;
+        zonaPortada.classList.add("con-imagen");
+    }
 
     zonaSoltar.addEventListener("click", () => inputArchivo.click());
     zonaSoltar.addEventListener("keydown", (e) => { if (e.key === "Enter") inputArchivo.click(); });
@@ -200,6 +239,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 mostrarToast(data.error || "No se pudo confirmar", "error");
                 botonConfirmar.disabled = false;
                 return;
+            }
+            if (portadaElegida) {
+                const formPortada = new FormData();
+                formPortada.append("portada", portadaElegida);
+                const r = await fetch(`/api/dataset/${encodeURIComponent(data.dataset)}/portada`, { method: "POST", body: formPortada });
+                const d = await r.json().catch(() => ({ ok: false }));
+                if (!d.ok) mostrarToast(d.error || "El dataset se guardó, pero no se pudo poner la portada.", "error");
+                else if (d.aviso) window.alert(d.aviso);
             }
             window.location.href = data.redirect;
         } catch (e) {
