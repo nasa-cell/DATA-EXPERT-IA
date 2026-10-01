@@ -3,8 +3,7 @@
 __pycache__/
 *.pyc
 
-# Compilación del instalador (el .exe se publica aparte)
-pc instalador/salida/
+# Compilación del instalador (el instalador final de salida/ sí se sube)
 pc instalador/_compilacion/
 build/
 dist/

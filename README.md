@@ -9,6 +9,8 @@ Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre 
 
 **[Descargar el instalador para Windows](https://drive.google.com/file/d/1ozK9bwAEOEEofJel41qRQI4mLuACOVdJ/view?usp=sharing)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
 
+También se puede descargar desde GitHub: [versión 1.1 (Releases)](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/tag/v1.1) o en la carpeta [`pc instalador/salida`](pc%20instalador/salida/Instalar_DataExpert_IA.exe) de este repositorio. Si ya tienes la versión 1.0, instalar encima la actualiza y conserva tus datos.
+
 Para generar el instalador desde el código se usa `pc instalador/construir_instalador.bat` (detalles en `pc instalador/LEEME.txt`).
 
 ## Características
