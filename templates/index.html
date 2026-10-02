@@ -61,6 +61,17 @@
     </aside>
 </section>
 
+<section class="tarjeta-varios" aria-labelledby="t-varios">
+    <div class="tarjeta-varios-texto">
+        <h2 id="t-varios">Procesar varios CSV a la vez</h2>
+        <p>Elige los datasets y los pasos: se procesan solos, varios al mismo tiempo, y la campana te avisa cuando terminan.</p>
+        <div class="tarjeta-varios-puntos" aria-hidden="true">
+            {% for d in datasets %}<span class="punto-tema" style="--tema-a: {{ d.color_a }}" title="{{ d.nombre }}"></span>{% endfor %}
+        </div>
+    </div>
+    <a href="{{ url_for('procesar_varios_pagina') }}" class="boton boton-primario boton-grande"><span class="icono" data-icono="rayo"></span>Procesar varios ({{ datasets | length }} datasets)</a>
+</section>
+
 {% if error %}
 <div class="alerta" role="alert">{{ error }}</div>
 {% endif %}

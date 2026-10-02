@@ -19,6 +19,7 @@
         <nav class="barra-enlaces" aria-label="Navegación principal">
             <a href="{{ url_for('inicio') }}"{% if request.endpoint == 'inicio' %} aria-current="page"{% endif %}>Inicio</a>
             <a href="{{ url_for('subir_pagina') }}"{% if request.endpoint == 'subir_pagina' %} aria-current="page"{% endif %}>Subir mi archivo</a>
+            <a href="{{ url_for('procesar_varios_pagina') }}" class="boton boton-varios"{% if request.endpoint == 'procesar_varios_pagina' %} aria-current="page"{% endif %}><span class="icono" data-icono="capas"></span>Procesar varios <span class="contador" title="Datasets disponibles">{{ menu_datasets | length }}</span></a>
             {% block topbar_extra %}{% endblock %}
             <details class="cambiar" id="cambiar-dataset">
                 <summary class="boton" style="min-height: 42px; padding: 0 16px;">Datasets<span class="icono" data-icono="abajo"></span></summary>
@@ -28,6 +29,21 @@
                     {% endfor %}
                 </ul>
             </details>
+            <div class="campana-caja">
+                <button type="button" class="campana" id="campana" aria-expanded="false" aria-controls="campana-lista" aria-label="Lo que se está procesando">
+                    <span class="icono" data-icono="campana"></span>
+                    <span class="campana-avance" aria-hidden="true"><span id="campana-avance"></span></span>
+                    <span class="campana-globo" id="campana-globo" hidden></span>
+                </button>
+                <div class="campana-lista" id="campana-lista" hidden>
+                    <p class="campana-titulo">Procesando <small id="campana-cuenta"></small></p>
+                    <div id="campana-items"></div>
+                    <div class="campana-pie">
+                        <a href="{{ url_for('procesar_varios_pagina') }}">Procesar varios</a>
+                        <button type="button" class="boton campana-escoba" id="campana-escoba"><span class="icono" data-icono="escoba"></span>Limpiar terminados</button>
+                    </div>
+                </div>
+            </div>
         </nav>
     </header>
 
@@ -41,6 +57,7 @@
     <script src="{{ url_for('static', filename='js/iconos.js') }}"></script>
     <script src="{{ url_for('static', filename='js/interfaz.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/campana.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

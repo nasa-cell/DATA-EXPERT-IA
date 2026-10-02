@@ -101,7 +101,12 @@ class Arranque:
             if self.modulo:
                 with self.modulo._LOCK_ACTIVIDAD:
                     activos = list(self.modulo.ACTIVIDAD["activos"].values())
-                return [nombres.get(p["accion"], p["accion"]) for p in activos]
+                en_curso = [nombres.get(p["accion"], p["accion"]) for p in activos if not p.get("lote")]
+                with self.modulo._LOCK_LOTE:
+                    pendientes = sum(t["fase"] in ("cola", "procesando") for t in self.modulo.LOTE.values())
+                if pendientes:
+                    en_curso.append(f"Procesar varios ({pendientes} {'dataset' if pendientes == 1 else 'datasets'})")
+                return en_curso
         except Exception:
             pass
         return []

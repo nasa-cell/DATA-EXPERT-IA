@@ -654,25 +654,6 @@ function esperar(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function avisoFlotante(procesos) {
-    let aviso = document.getElementById("aviso-actividad");
-    const ajenos = procesos.filter((p) => !(p.dataset === window.DATASET_ACTUAL && EN_CURSO_AQUI.has(p.accion)));
-    if (!ajenos.length) {
-        if (aviso) aviso.remove();
-        return;
-    }
-    if (!aviso) {
-        aviso = document.createElement("a");
-        aviso.id = "aviso-actividad";
-        aviso.className = "aviso-actividad";
-        document.body.appendChild(aviso);
-    }
-    const p = ajenos[0];
-    const pct = p.pct !== undefined ? ` (${p.pct}%)` : "";
-    aviso.href = p.url;
-    aviso.innerHTML = `<span class="spinner"></span><span>Calculando ${escapar(NOMBRES_PASO[p.accion] || p.accion)} de «${escapar(p.nombre_dataset)}»${pct}${ajenos.length > 1 ? ` y ${ajenos.length - 1} más` : ""}… te aviso al terminar</span>`;
-}
-
 function marcarProcesosRemotos(activos) {
     document.querySelectorAll(".boton-accion").forEach((boton) => {
         const accion = boton.dataset.accion;
@@ -715,17 +696,22 @@ async function vigilarActividad() {
                 marcarVisto(evento.secuencia);
                 const esAqui = window.DATASET_ACTUAL === evento.dataset;
                 if (esAqui && EN_CURSO_AQUI.has(evento.accion)) continue;
+                // Los pasos de «Procesar varios» los avisa la campana una vez por dataset; aquí solo
+                // se actualiza el dataset abierto, sin un aviso por cada paso.
+                if (evento.lote) {
+                    if (esAqui) { await recargarEstado(); actualizarResumen(); }
+                    continue;
+                }
                 if (esAqui) {
                     await alTerminarAqui(evento);
                 } else {
                     const texto = evento.ok
                         ? `✓ ${NOMBRES_PASO[evento.accion]} de «${evento.nombre_dataset}» terminado.`
                         : `⚠ ${NOMBRES_PASO[evento.accion]} de «${evento.nombre_dataset}» no se pudo completar: ${evento.error}`;
-                    mostrarToast(texto, evento.ok ? "exito" : "error", { url: evento.url, texto: "Volver a ese dataset" });
+                    mostrarToast(texto, evento.ok ? "exito" : "error", { url: evento.url, texto: "Ver resultado →" });
                 }
             }
 
-            avisoFlotante(data.activos);
             marcarProcesosRemotos(data.activos);
             if (!data.activos.length) break;
             await esperar(1500);
@@ -815,7 +801,9 @@ async function ejecutarEntrenamiento(boton, yaEnCurso = false) {
 
                     if (relleno) relleno.style.width = `${data.pct}%`;
                     if (texto) {
-                        texto.textContent = data.total
+                        texto.textContent = data.en_cola
+                            ? "En cola: empieza cuando termine otro entrenamiento (se entrenan varios a la vez)."
+                            : data.total
                             ? `${data.hecho} / ${data.total} combinaciones probadas (${data.pct}%)`
                             : "Preparando los datos...";
                     }

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block titulo %}DataExpert IA — Procesar varios{% endblock %}
+
+{% block contenido %}
+<section class="panel-dataset">
+    <div class="panel-dataset-icono"><span class="icono" data-icono="capas"></span></div>
+    <div class="panel-dataset-info">
+        <p class="etiqueta">Varios datasets a la vez</p>
+        <h1>Procesar varios</h1>
+        <p>
+            Marca los datasets y los pasos, y toca un solo botón. Cada dataset hace sus pasos en orden y se procesan
+            varios al mismo tiempo. Puedes cambiar de página: siguen procesándose y la campana de arriba te avisa.
+        </p>
+    </div>
+</section>
+
+<section class="panel-acciones" aria-labelledby="t-elegir">
+    <div class="varios-titulo">
+        <h2 id="t-elegir">1. Elige los datasets</h2>
+        <div class="varios-botones">
+            <button type="button" class="boton" id="elegir-todos">Elegir todos ({{ datasets | length }})</button>
+            <button type="button" class="boton boton-fantasma" id="elegir-ninguno">Ninguno</button>
+        </div>
+    </div>
+    <p class="texto-ayuda">Aquí están todos tus datasets de este momento: los incluidos y los que subiste, sean CSV o Excel. Si subes uno nuevo, aparece solo en esta lista.</p>
+    <div class="varios-elegir" id="varios-elegir">
+        {% for d in datasets %}
+        <label class="varios-dataset" style="--tema-a: {{ d.color_a }}">
+            <input type="checkbox" value="{{ d.id }}"{% if d.id in elegir %} checked{% endif %}>
+            <span class="punto-tema"></span>
+            <span class="varios-dataset-texto">
+                <b>{{ d.nombre }}</b>
+                <small>{% if d.filas is not none %}{{ "{:,}".format(d.filas).replace(",", ".") }} filas · {{ d.columnas }} columnas{% endif %}</small>
+            </span>
+            <span class="origen origen-{{ d.origen }}">{{ {"csv": "CSV", "excel": "Excel", "incluido": "Incluido"}.get(d.origen, "Subido") }}</span>
+        </label>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="panel-acciones" aria-labelledby="t-pasos">
+    <h2 id="t-pasos">2. Elige qué hacer</h2>
+    <div class="varios-opciones" id="varios-preajustes" role="group" aria-label="Atajos de pasos">
+        <button type="button" class="opcion-grande" data-preajuste="todo" aria-pressed="true">Todo<small>Los 9 pasos, con informe PDF</small></button>
+        <button type="button" class="opcion-grande" data-preajuste="entrenar" aria-pressed="false">Solo entrenar<small>Preprocesar, Entrenar y Evaluar</small></button>
+        <button type="button" class="opcion-grande" data-preajuste="explorar" aria-pressed="false">Solo explorar<small>Explorar, Estadística y Gráficos</small></button>
+        <button type="button" class="opcion-grande" data-preajuste="elegir" aria-pressed="false">Elegir pasos<small>Marca uno por uno</small></button>
+    </div>
+    <div class="varios-pasos" id="varios-pasos"></div>
+    <p class="texto-ayuda" id="nota-pasos" aria-live="polite"></p>
+</section>
+
+<section class="panel-acciones" aria-labelledby="t-vez">
+    <h2 id="t-vez">3. Cuántos a la vez</h2>
+    <div class="varios-opciones" id="varios-a-la-vez" role="group" aria-label="Cuántos datasets a la vez">
+        {% for n in a_la_vez_permitidos %}
+        <button type="button" class="opcion-grande" data-vez="{{ n }}" aria-pressed="{{ 'true' if n == a_la_vez else 'false' }}">{{ n }} a la vez<small>{% if n == 3 %}Recomendado: la computadora va fluida{% else %}Más rápido en total; la computadora puede ponerse lenta{% endif %}</small></button>
+        {% endfor %}
+    </div>
+    <div class="varios-lanzar">
+        <button type="button" class="boton boton-primario boton-grande" id="boton-procesar"><span class="icono" data-icono="rayo"></span><span id="texto-procesar">Procesar</span></button>
+        <p class="texto-ayuda" id="nota-procesar">Los pasos que ya estaban hechos en un dataset no se repiten. Si un paso falla en un dataset, ese se detiene y los demás siguen.</p>
+    </div>
+</section>
+
+<section class="panel-acciones" aria-labelledby="t-avance">
+    <div class="varios-titulo">
+        <h2 id="t-avance">4. Avance</h2>
+        <div class="varios-resumen" id="varios-resumen" aria-live="polite"></div>
+    </div>
+    <div class="varios-trabajos" id="varios-trabajos">
+        <p class="varios-vacio">Todavía no hay nada procesándose. Elige datasets y pasos arriba y toca el botón.</p>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/procesar.js') }}"></script>
+{% endblock %}

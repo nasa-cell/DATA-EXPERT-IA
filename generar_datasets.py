@@ -17,6 +17,59 @@ from sklearn.datasets import load_iris
 RANDOM_STATE = 42
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
+# Los datos se generan con nombres cortos en inglés (como iris de scikit-learn) y se guardan con
+# columnas y categorías en español, que es lo que ve la persona en tablas, gráficos y el PDF.
+COLUMNAS_EN_ESPANOL = {
+    # iris
+    "sepal_length": "largo_sépalo", "sepal_width": "ancho_sépalo",
+    "petal_length": "largo_pétalo", "petal_width": "ancho_pétalo", "species": "especie",
+    # diabetes
+    "Pregnancies": "embarazos", "Glucose": "glucosa", "BloodPressure": "presión_arterial",
+    "SkinThickness": "grosor_piel", "Insulin": "insulina", "BMI": "imc",
+    "DiabetesPedigreeFunction": "antecedentes_familiares", "Age": "edad", "Outcome": "diabetes",
+    # viviendas
+    "area": "superficie", "bedrooms": "dormitorios", "bathrooms": "baños",
+    "location_score": "puntaje_ubicación",
+    # vehículos
+    "engine_size": "cilindrada", "horsepower": "caballos_fuerza", "weight": "peso",
+    "fuel_consumption": "consumo_combustible", "year": "año", "category": "categoría",
+    # clientes
+    "income": "ingresos", "purchases": "compras", "visits": "visitas", "spending": "gasto",
+    "membership": "membresía", "segment": "segmento",
+    # empleados
+    "monthly_income": "ingreso_mensual", "years_at_company": "años_en_empresa",
+    "job_satisfaction": "satisfacción_laboral", "work_life_balance": "equilibrio_vida_trabajo",
+    "distance_from_home": "distancia_al_trabajo", "num_companies_worked": "empresas_anteriores",
+    "overtime": "horas_extra", "attrition": "renuncia",
+    # estudiantes
+    "study_hours": "horas_estudio", "attendance": "asistencia", "sleep_hours": "horas_sueño",
+    "previous_grade": "nota_anterior", "parental_support": "apoyo_familiar",
+    "extracurricular": "actividades_extra", "final_score": "nota_final",
+    # préstamos
+    "annual_income": "ingreso_anual", "loan_amount": "monto_préstamo", "credit_score": "puntaje_crédito",
+    "debt_to_income": "deuda_sobre_ingreso", "employment_years": "años_empleo",
+    "previous_defaults": "impagos_anteriores", "loan_purpose": "motivo_préstamo",
+    "loan_approved": "préstamo_aprobado",
+    # varios datasets
+    "categoria": "categoría", "age": "edad", "price": "precio",
+}
+# Las viviendas tienen «age» (años de la casa), no la edad de una persona.
+COLUMNAS_POR_ARCHIVO = {"viviendas.csv": {"age": "antigüedad"}}
+CATEGORIAS_EN_ESPANOL = {
+    "Si": "Sí", "Basica": "Básica", "Gold": "Oro", "Educacion": "Educación",
+    "Vehiculo": "Vehículo", "Economico": "Económico",
+}
+
+
+def en_espanol(df: pd.DataFrame, nombre_archivo: str) -> pd.DataFrame:
+    """Columnas y categorías en español (los números no cambian)."""
+    nombres = {**COLUMNAS_EN_ESPANOL, **COLUMNAS_POR_ARCHIVO.get(nombre_archivo, {})}
+    df = df.rename(columns=nombres)
+    for columna in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[columna]):
+            df[columna] = df[columna].replace(CATEGORIAS_EN_ESPANOL)
+    return df
+
 
 def generar_iris():
     """Dataset público real de especies de flores (Fisher, 1936), vía scikit-learn."""
@@ -384,7 +437,7 @@ def main():
         "prestamos.csv": generar_prestamos,
     }
     for nombre_archivo, generador in generadores.items():
-        df = generador()
+        df = en_espanol(generador(), nombre_archivo)
         ruta = os.path.join(DATA_DIR, nombre_archivo)
         df.to_csv(ruta, index=False)
         print(f"  {nombre_archivo}: {df.shape[0]} filas x {df.shape[1]} columnas -> {ruta}")

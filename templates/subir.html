@@ -12,32 +12,34 @@
         <p class="etiqueta">Dataset propio</p>
         <h1>Sube tu CSV o Excel</h1>
         <p>
-            Sube un archivo con tus propios datos (por ejemplo, notas de alumnos, ventas de un negocio, gastos
-            personales o una encuesta) para analizarlo con las mismas herramientas que los datasets incluidos.
+            Sube uno o varios archivos con tus propios datos (por ejemplo, notas de alumnos, ventas de un negocio, gastos
+            personales o una encuesta) para analizarlos con las mismas herramientas que los datasets incluidos.
         </p>
     </div>
 </section>
 
 <section class="panel-acciones">
-    <h2>1. Elige el archivo</h2>
-    <input type="file" id="input-archivo" accept=".csv,.xlsx,.xls" hidden>
-    <div class="zona-soltar" id="zona-soltar" tabindex="0" role="button" aria-label="Elegir un archivo CSV o Excel">
+    <h2>1. Elige los archivos</h2>
+    <input type="file" id="input-archivo" accept=".csv,.xlsx,.xls" multiple hidden>
+    <div class="zona-soltar" id="zona-soltar" tabindex="0" role="button" aria-label="Elegir uno o varios archivos CSV o Excel">
         <p class="zona-soltar-icono"><span class="icono" data-icono="archivo"></span></p>
-        <p><strong>Arrastra aquí tu documento</strong> o haz clic para elegirlo</p>
-        <p class="texto-tenue" id="nombre-archivo-elegido">.csv o .xlsx</p>
+        <p><strong>Arrastra aquí uno o varios archivos</strong> o haz clic para elegirlos</p>
+        <p class="texto-tenue" id="nombre-archivo-elegido">.csv o .xlsx · hasta 10 a la vez</p>
     </div>
     <p class="texto-ayuda">
-        Máximo 5 MB o 20.000 filas. Necesita al menos unas 30 a 50 filas para dar un resultado medianamente
-        confiable, y una columna clara de «lo que quieres predecir».
+        Máximo 5 MB o 20.000 filas por archivo. Cada uno necesita al menos unas 30 a 50 filas para dar un resultado
+        medianamente confiable, y una columna clara de «lo que quieres predecir».
     </p>
 </section>
 
 <div id="estado-subida" class="estado-proceso" hidden></div>
 
+<!-- Un solo archivo: se eligen las columnas en la tabla y se puede poner una foto de portada -->
 <section class="panel-resultado-wrap" id="panel-configuracion" hidden>
     <div class="panel-resultado">
         <div class="resultado-bloque">
-            <h3>2. Elige las columnas</h3>
+            <h3>2. Revisa las columnas</h3>
+            <div id="detectado-unico"></div>
             <p>
                 Marca «Usar» en las columnas que quieres usar para predecir (se resaltan con el color de la
                 página) y «Predecir esto» en la columna que quieres calcular (se resalta en
@@ -45,9 +47,7 @@
                 desmarcadas, pero puedes cambiarlo.
             </p>
             <p id="aviso-pocas-filas" class="badge badge-aviso" hidden></p>
-            <div class="tabla-subida-wrap">
-                <table class="tabla-subida" id="tabla-subida"></table>
-            </div>
+            <div id="columnas-unico" class="resultado-bloque"></div>
             <h3>3. Foto de portada (opcional)</h3>
             <p>Aparece en la tarjeta del dataset y en la portada del informe PDF. Puedes ponerla o cambiarla después.</p>
             <input type="file" id="input-portada-subida" accept=".jpg,.jpeg,.png,.webp" hidden>
@@ -61,6 +61,38 @@
                 <button type="button" class="boton boton-primario" id="boton-confirmar-subida">
                     Analizar este dataset<span class="icono" data-icono="flecha"></span>
                 </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Varios archivos: una fila por archivo con sus columnas detectadas y qué predecir -->
+<section class="panel-resultado-wrap" id="panel-varios" hidden>
+    <div class="panel-resultado">
+        <div class="resultado-bloque">
+            <h3>2. Revisa cada archivo</h3>
+            <p>
+                Cada archivo dice cuántas columnas y filas se detectaron. Ya viene elegida para predecir la última columna;
+                cámbiala si no es la correcta. En «Ver columnas» puedes ver la vista previa y elegir qué columnas usar.
+                La foto de portada se puede poner después, en cada dataset.
+            </p>
+            <div class="lista-archivos" id="lista-archivos"></div>
+            <div class="acciones-subida">
+                <button type="button" class="boton boton-primario" id="boton-agregar-varios">Agregar</button>
+                <p class="texto-ayuda" id="nota-varios" aria-live="polite"></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="panel-resultado-wrap" id="panel-agregados" hidden>
+    <div class="panel-resultado">
+        <div class="resultado-bloque">
+            <h3 id="titulo-agregados">Datasets agregados</h3>
+            <p id="texto-agregados"></p>
+            <div class="acciones-subida">
+                <a class="boton boton-primario" id="enlace-procesar-agregados" href="{{ url_for('procesar_varios_pagina') }}"><span class="icono" data-icono="rayo"></span><span>Procesarlos ahora</span></a>
+                <a class="boton" href="{{ url_for('inicio') }}#datasets">Ver en Inicio</a>
             </div>
         </div>
     </div>

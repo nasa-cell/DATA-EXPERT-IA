@@ -37,7 +37,7 @@ DATASETS = {
         "icono": "🌸",
         "imagen": "img/datasets/iris.jpg",
         "descripcion": "Clasificación de especies de flores según medidas de sépalos y pétalos.",
-        "objetivo": "species",
+        "objetivo": "especie",
         "problema": "clasificacion",
         "color_a": "#c084fc", "color_b": "#ec4899",  # violeta -> rosa (floral)
     },
@@ -47,7 +47,7 @@ DATASETS = {
         "icono": "❤️",
         "imagen": "img/datasets/diabetes.jpg",
         "descripcion": "Diagnóstico de diabetes a partir de indicadores clínicos.",
-        "objetivo": "Outcome",
+        "objetivo": "diabetes",
         "problema": "clasificacion",
         "color_a": "#fb7185", "color_b": "#e11d48",  # rosa -> rojo (clínico)
     },
@@ -57,7 +57,7 @@ DATASETS = {
         "icono": "🏠",
         "imagen": "img/datasets/viviendas.jpg",
         "descripcion": "Predicción del precio de una vivienda según sus características.",
-        "objetivo": "price",
+        "objetivo": "precio",
         "problema": "regresion",
         "color_a": "#38bdf8", "color_b": "#0ea5e9",  # celeste (cielo/hogar)
     },
@@ -67,7 +67,7 @@ DATASETS = {
         "icono": "🚗",
         "imagen": "img/datasets/vehiculos.jpg",
         "descripcion": "Predicción del precio de un vehículo según sus especificaciones técnicas.",
-        "objetivo": "price",
+        "objetivo": "precio",
         "problema": "regresion",
         "color_a": "#fb923c", "color_b": "#ea580c",  # naranja (energía/velocidad)
     },
@@ -77,7 +77,7 @@ DATASETS = {
         "icono": "🛒",
         "imagen": "img/datasets/clientes.jpg",
         "descripcion": "Segmentación de clientes según su comportamiento de compra.",
-        "objetivo": "segment",
+        "objetivo": "segmento",
         "problema": "clasificacion",
         "color_a": "#34d399", "color_b": "#0d9488",  # esmeralda -> teal (comercio)
     },
@@ -96,8 +96,8 @@ DATASETS = {
         "nombre": "Empleados",
         "icono": "💼",
         "imagen": "img/datasets/empleados.jpg",
-        "descripcion": "Predicción de renuncia (attrition) de un empleado según su situación laboral.",
-        "objetivo": "attrition",
+        "descripcion": "Predicción de la renuncia de un empleado según su situación laboral.",
+        "objetivo": "renuncia",
         "problema": "clasificacion",
         "color_a": "#64748b", "color_b": "#334155",  # gris azulado (corporativo/RRHH)
     },
@@ -107,7 +107,7 @@ DATASETS = {
         "icono": "🎓",
         "imagen": "img/datasets/estudiantes.jpg",
         "descripcion": "Predicción de la nota final de un estudiante según sus hábitos de estudio.",
-        "objetivo": "final_score",
+        "objetivo": "nota_final",
         "problema": "regresion",
         "color_a": "#fbbf24", "color_b": "#d97706",  # ámbar (académico)
     },
@@ -117,7 +117,7 @@ DATASETS = {
         "icono": "🏦",
         "imagen": "img/datasets/prestamos.jpg",
         "descripcion": "Predicción de aprobación de un préstamo bancario según el riesgo crediticio.",
-        "objetivo": "loan_approved",
+        "objetivo": "préstamo_aprobado",
         "problema": "clasificacion",
         "color_a": "#4ade80", "color_b": "#15803d",  # verde (finanzas)
     },
@@ -130,7 +130,12 @@ _CACHE_DATAFRAMES = {}
 
 # Último archivo subido (CSV o Excel) ANTES de que la persona elija qué columnas usar y cuál es
 # el objetivo. Al confirmar se guarda en disco como un dataset más (ver registrar_dataset_subido).
-DATASET_SUBIDO = {"df": None, "nombre_archivo": None}
+# Archivos recién subidos que todavía no se confirmaron (se pueden subir varios a la vez): cada
+# uno con su número, hasta que la persona elige las columnas y lo agrega. Se olvidan a la hora.
+SUBIDAS_PENDIENTES = {}
+_LOCK_SUBIDAS = threading.Lock()
+MAX_SUBIDAS_PENDIENTES = 20
+VIDA_SUBIDA_SEGUNDOS = 60 * 60
 
 MIN_FILAS_CONFIABLE = 50
 LIMITE_FILAS_SUBIDA = 20000
@@ -159,18 +164,32 @@ def _es_columna_identificadora(nombre_columna: str, serie) -> bool:
     return False
 
 
-def analizar_archivo_subido(df, nombre_archivo: str) -> dict:
+def analizar_archivo_subido(df, nombre_archivo: str, formato: str = "csv") -> dict:
     """Guarda el DataFrame recién subido (todavía sin confirmar) y arma la información que la
-    pantalla de subida necesita para mostrar la vista previa: columnas disponibles, cuáles
-    sugerir excluir (parecen identificador) y si hay pocas filas para un resultado confiable."""
+    pantalla de subida necesita para mostrar la vista previa: cuántas columnas y filas se
+    detectaron, columnas disponibles, cuáles sugerir excluir (parecen identificador), columnas
+    vacías o repetidas y si hay pocas filas para un resultado confiable."""
     df.columns = [str(c) for c in df.columns]
-    DATASET_SUBIDO["df"] = df
-    DATASET_SUBIDO["nombre_archivo"] = nombre_archivo
+    token = uuid.uuid4().hex
+    ahora = time.time()
+    with _LOCK_SUBIDAS:
+        for clave in [c for c, v in SUBIDAS_PENDIENTES.items() if ahora - v["creado"] > VIDA_SUBIDA_SEGUNDOS]:
+            del SUBIDAS_PENDIENTES[clave]
+        while len(SUBIDAS_PENDIENTES) >= MAX_SUBIDAS_PENDIENTES:
+            del SUBIDAS_PENDIENTES[min(SUBIDAS_PENDIENTES, key=lambda c: SUBIDAS_PENDIENTES[c]["creado"])]
+        SUBIDAS_PENDIENTES[token] = {"df": df, "nombre_archivo": nombre_archivo, "formato": formato, "creado": ahora}
 
     columnas = df.columns.tolist()
     sugeridas_excluir = [c for c in columnas if _es_columna_identificadora(c, df[c])]
+    # pandas renombra los encabezados repetidos como «nota.1», «nota.2»…
+    repetidas = [c for c in columnas if re.fullmatch(r"(.+)\.\d+", c) and re.fullmatch(r"(.+)\.\d+", c).group(1) in columnas]
 
     return {
+        "token": token,
+        "formato": formato,
+        "total_columnas": len(columnas),
+        "columnas_vacias": [c for c in columnas if df[c].isnull().all()],
+        "columnas_repetidas": repetidas,
         "nombre_archivo": nombre_archivo,
         "filas": int(df.shape[0]),
         "columnas": columnas,
@@ -180,6 +199,7 @@ def analizar_archivo_subido(df, nombre_archivo: str) -> dict:
         # JSON de respuesta rompe el fetch() del navegador (NaN no es JSON válido, a diferencia
         # de Python). .replace() sí cambia la columna a tipo genérico y deja el None real.
         "preview": df.head(8).replace({np.nan: None}).to_dict(orient="records"),
+        "filas_vista_previa": int(min(8, df.shape[0])),
         "pocas_filas": df.shape[0] < MIN_FILAS_CONFIABLE,
     }
 
@@ -295,7 +315,18 @@ def _cargar_subidos():
         DATASETS[nombre] = {"archivo": None, "imagen": None, **info}
 
 
-def registrar_dataset_subido(df, objetivo: str, problema: str, nombre_archivo: str) -> str:
+def subida_pendiente(token):
+    """El archivo subido que espera confirmación, o None si ya no está."""
+    with _LOCK_SUBIDAS:
+        return SUBIDAS_PENDIENTES.get(token) if token else None
+
+
+def quitar_subida_pendiente(token):
+    with _LOCK_SUBIDAS:
+        SUBIDAS_PENDIENTES.pop(token, None)
+
+
+def registrar_dataset_subido(df, objetivo: str, problema: str, nombre_archivo: str, formato: str = "csv") -> str:
     """Guarda en disco el dataset ya confirmado (columnas elegidas + objetivo) y lo da de alta
     como un dataset más: a partir de acá se analiza igual que los incluidos y sigue disponible
     aunque se cierre la aplicación. Devuelve su identificador."""
@@ -314,6 +345,7 @@ def registrar_dataset_subido(df, objetivo: str, problema: str, nombre_archivo: s
         "problema": problema,
         "color_a": color_a, "color_b": color_b,
         "portada": None,
+        "formato": formato,
         "fecha": datetime.now().isoformat(timespec="seconds"),
     }
     _guardar_info(nombre, info)
@@ -451,6 +483,10 @@ _INVALIDA = {
 }
 
 VERSION_ESTADO = 2
+# Sube cuando cambian los nombres de las columnas de los datasets incluidos (la 2 los pasó al
+# español): un análisis guardado con los nombres anteriores ya no sirve y se empieza de nuevo.
+# Los datasets subidos por la persona no se ven afectados.
+VERSION_COLUMNAS_INCLUIDOS = 2
 BLOQUEO = threading.RLock()
 
 
@@ -504,7 +540,8 @@ def _leer_estado(nombre: str):
     try:
         with open(ruta, "rb") as f:
             datos = pickle.load(f)
-        if datos.get("version") == VERSION_ESTADO and datos["estado"].get("dataset") == nombre:
+        columnas_al_dia = nombre not in INCLUIDOS or datos.get("columnas") == VERSION_COLUMNAS_INCLUIDOS
+        if datos.get("version") == VERSION_ESTADO and datos["estado"].get("dataset") == nombre and columnas_al_dia:
             return {**estado_vacio(nombre), **datos["estado"]}
     except Exception as exc:
         print(f"No se pudo leer el análisis guardado de {nombre}: {exc}")
@@ -531,7 +568,8 @@ def guardar_estado(nombre: str = None):
         try:
             temporal = ruta.with_suffix(".tmp")
             with open(temporal, "wb") as f:
-                pickle.dump({"version": VERSION_ESTADO, "estado": estado}, f, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump({"version": VERSION_ESTADO, "columnas": VERSION_COLUMNAS_INCLUIDOS, "estado": estado},
+                            f, protocol=pickle.HIGHEST_PROTOCOL)
             os.replace(temporal, ruta)
         except Exception as exc:
             print(f"No se pudo guardar el análisis de {nombre}: {exc}")

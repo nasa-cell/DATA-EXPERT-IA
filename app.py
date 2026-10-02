@@ -38,6 +38,7 @@ from src import linear_algebra_service as algebra_srv
 from src import visualization_service as viz
 from src import machine_learning_service as ml
 from src import pdf_service as pdf_srv
+from src.turnos import TurnoJusto
 
 INFORMES_DIR = str(cfg.INFORMES_DIR)
 RESULTADOS_DIR = str(cfg.RESULTADOS_DIR)
@@ -180,7 +181,7 @@ def _leer_archivo_subido(archivo, minimo_columnas: int = 2):
         )
 
     _validar_tabla(df, minimo_columnas)
-    return df, _nombre_visible(nombre)
+    return df, _nombre_visible(nombre), ("excel" if extension in (".xlsx", ".xls") else "csv")
 
 
 def _nombre_visible(nombre_archivo: str) -> str:
@@ -207,8 +208,8 @@ def api_subir_dataset():
         if not archivo or not archivo.filename:
             return _error("No se recibió ningún archivo.")
 
-        df, nombre_archivo = _leer_archivo_subido(archivo)
-        resultado = ds.analizar_archivo_subido(df, nombre_archivo)
+        df, nombre_archivo, formato = _leer_archivo_subido(archivo)
+        resultado = ds.analizar_archivo_subido(df, nombre_archivo, formato)
         return jsonify({"ok": True, **resultado})
     except ValueError as exc:
         return _error(str(exc))
@@ -219,17 +220,17 @@ def api_subir_dataset():
 @app.route("/api/subir-dataset/confirmar", methods=["POST"])
 def api_subir_dataset_confirmar():
     try:
-        if ds.DATASET_SUBIDO["df"] is None:
-            return _error("No hay ningún archivo subido todavía. Sube uno primero.")
-
         datos = request.get_json(silent=True) or {}
+        pendiente = ds.subida_pendiente(datos.get("token"))
+        if pendiente is None:
+            return _error("Ese archivo ya no está en espera (pasó más de una hora o ya se agregó). Súbelo de nuevo.")
         objetivo = datos.get("objetivo")
         columnas_features = datos.get("columnas_features") or []
 
         if not objetivo:
             return _error("Elige cuál columna es el objetivo (lo que quieres predecir).")
 
-        df = ds.DATASET_SUBIDO["df"]
+        df = pendiente["df"]
         if objetivo not in df.columns:
             return _error(f'La columna objetivo "{objetivo}" no existe en el archivo.')
 
@@ -242,8 +243,8 @@ def api_subir_dataset_confirmar():
             return _error(f'La columna objetivo "{objetivo}" está vacía.')
         problema = ml.detectar_tipo_problema(df_final[objetivo])
 
-        nombre = ds.registrar_dataset_subido(df_final, objetivo, problema, ds.DATASET_SUBIDO["nombre_archivo"])
-        ds.DATASET_SUBIDO.update({"df": None, "nombre_archivo": None})
+        nombre = ds.registrar_dataset_subido(df_final, objetivo, problema, pendiente["nombre_archivo"], pendiente["formato"])
+        ds.quitar_subida_pendiente(datos.get("token"))
 
         return jsonify({"ok": True, "dataset": nombre,
                         "redirect": url_for("seleccionar_dataset_pagina", nombre=nombre)})
@@ -290,17 +291,23 @@ def api_color(nombre):
 # ============================================================
 # El servidor termina cada paso aunque el navegador se vaya a otra página, y lo guarda en el
 # análisis de su dataset. Aquí se anota qué está corriendo y qué terminó, para que cualquier
-# página pueda avisar «terminó X» y el dashboard retome lo que estaba en curso.
+# página pueda avisar «terminó X», la campana muestre el avance y el dashboard retome lo que
+# estaba en curso. Los pasos de «Procesar varios» se marcan con lote=True: de esos avisa la
+# campana una sola vez por dataset, no por cada paso.
 
 _LOCK_ACTIVIDAD = threading.Lock()
-ACTIVIDAD = {"secuencia": 0, "activos": {}, "terminados": deque(maxlen=30)}
+ACTIVIDAD = {"secuencia": 0, "activos": {}, "terminados": deque(maxlen=60)}
+# Avisos de la campana: cada paso terminado desde un dataset (explorar, gráficos, entrenar, PDF…) y
+# cada dataset terminado en «Procesar varios». Quedan hasta que la persona los limpia con la escoba;
+# si el mismo paso del mismo dataset se vuelve a hacer, queda solo el último aviso.
+AVISOS = deque(maxlen=60)
 
 
-def _registrar_inicio(nombre: str, accion: str) -> int:
+def _registrar_inicio(nombre: str, accion: str, lote: bool = False) -> int:
     with _LOCK_ACTIVIDAD:
         ACTIVIDAD["secuencia"] += 1
         numero = ACTIVIDAD["secuencia"]
-        ACTIVIDAD["activos"][numero] = {"id": numero, "dataset": nombre, "accion": accion}
+        ACTIVIDAD["activos"][numero] = {"id": numero, "dataset": nombre, "accion": accion, "lote": lote}
         return numero
 
 
@@ -310,7 +317,17 @@ def _registrar_fin(numero: int, error: str = None) -> int:
         ACTIVIDAD["secuencia"] += 1
         if proceso:
             ACTIVIDAD["terminados"].append({**proceso, "secuencia": ACTIVIDAD["secuencia"], "ok": error is None, "error": error})
+            if not proceso["lote"]:
+                _agregar_aviso(proceso["dataset"], proceso["accion"], error)
         return ACTIVIDAD["secuencia"]
+
+
+def _agregar_aviso(nombre: str, accion: str, error: str = None):
+    """Llamar con _LOCK_ACTIVIDAD tomado."""
+    for viejo in [a for a in AVISOS if a["dataset"] == nombre and a["accion"] == accion]:
+        AVISOS.remove(viejo)
+    ACTIVIDAD["secuencia"] += 1
+    AVISOS.append({"id": ACTIVIDAD["secuencia"], "dataset": nombre, "accion": accion, "ok": error is None, "error": error})
 
 
 def _en_curso(nombre: str) -> list:
@@ -318,20 +335,40 @@ def _en_curso(nombre: str) -> list:
         return [p["accion"] for p in ACTIVIDAD["activos"].values() if p["dataset"] == nombre]
 
 
+def _url_dataset(nombre: str) -> str:
+    return f"/dataset/{nombre}"
+
+
+def _nombre_dataset(nombre: str) -> str:
+    return ds.DATASETS.get(nombre, {}).get("nombre", nombre)
+
+
 @app.route("/api/actividad")
 def api_actividad():
     with _LOCK_ACTIVIDAD:
         activos = [dict(p) for p in ACTIVIDAD["activos"].values()]
         terminados = [dict(t) for t in ACTIVIDAD["terminados"]]
+        avisos = [dict(a) for a in AVISOS]
         secuencia = ACTIVIDAD["secuencia"]
-    for proceso in activos + terminados:
-        proceso["nombre_dataset"] = ds.DATASETS.get(proceso["dataset"], {}).get("nombre", proceso["dataset"])
-        proceso["url"] = url_for("seleccionar_dataset_pagina", nombre=proceso["dataset"])
-    with _LOCK_ENTRENAMIENTO:
-        for proceso in activos:
-            if proceso["accion"] == "entrenar" and ENTRENAMIENTO["total"]:
-                proceso["pct"] = round(ENTRENAMIENTO["hecho"] / ENTRENAMIENTO["total"] * 100)
-    return jsonify({"ok": True, "secuencia": secuencia, "activos": activos, "terminados": terminados})
+    for proceso in activos + terminados + avisos:
+        proceso["nombre_dataset"] = _nombre_dataset(proceso["dataset"])
+        proceso["url"] = _url_dataset(proceso["dataset"])
+    for proceso in activos:
+        if proceso["accion"] == "entrenar":
+            proceso["pct"], proceso["en_cola"] = _avance_entrenamiento(proceso["dataset"])
+    return jsonify({"ok": True, "secuencia": secuencia, "activos": activos, "terminados": terminados,
+                    "avisos": avisos, "lotes": _trabajos_de_lote(), "a_la_vez": TURNOS.cupos})
+
+
+@app.route("/api/avisos/limpiar", methods=["POST"])
+def api_limpiar_avisos():
+    """La escoba de la campana: quita los avisos y los datasets ya terminados de «Procesar varios»."""
+    with _LOCK_ACTIVIDAD:
+        AVISOS.clear()
+    with _LOCK_LOTE:
+        for clave in [c for c, t in LOTE.items() if t["fase"] in ("listo", "error")]:
+            del LOTE[clave]
+    return jsonify({"ok": True})
 
 
 @app.route("/api/estado")
@@ -350,7 +387,7 @@ def api_reiniciar():
     """Borra todo lo calculado para el dataset abierto y deja el flujo como al principio."""
     try:
         nombre = ds.dataset_actual()
-        if _en_curso(nombre):
+        if _en_curso(nombre) or _en_lote(nombre) or _entrenando_este_dataset(nombre):
             return _error("⚠ Espera a que termine el paso que se está calculando antes de reiniciar.")
         ds.reiniciar_analisis(nombre)
         if os.path.isfile(_ruta_pdf(nombre)):
@@ -360,19 +397,19 @@ def api_reiniciar():
         return _error(str(exc))
 
 
-def _ejecutar_paso(accion: str, calcular):
-    """Corre un paso sobre el dataset abierto: `calcular(nombre, meta, estado)` devuelve
-    (respuesta, cambios). El cálculo va fuera del cerrojo general (se puede navegar mientras
-    tanto) y el resultado se guarda en el análisis de ESE dataset, aunque ya se haya abierto otro."""
-    try:
-        with ds.BLOQUEO:
-            nombre = ds.dataset_actual()
-            estado = ds.estado_de(nombre)
-            meta = ds.obtener_metadata(nombre)
-    except Exception as exc:
-        return _error(str(exc))
+class PasoRechazado(Exception):
+    """Un paso que no se puede ejecutar todavía (falta un paso anterior, etc.)."""
 
-    numero = _registrar_inicio(nombre, accion)
+
+def _correr_paso(nombre: str, accion: str, calcular, lote: bool = False) -> dict:
+    """Corre un paso sobre un dataset (esté abierto o no): `calcular(nombre, meta, estado)`
+    devuelve (respuesta, cambios). El cálculo va fuera del cerrojo general (se puede navegar y
+    procesar otros datasets mientras tanto) y el resultado se guarda en el análisis de ESE
+    dataset. Devuelve la respuesta guardada; si falla, lanza la excepción."""
+    with ds.BLOQUEO:
+        estado = ds.estado_de(nombre)
+        meta = ds.obtener_metadata(nombre)
+    numero = _registrar_inicio(nombre, accion, lote)
     try:
         respuesta, cambios = calcular(nombre, meta, estado)
         respuesta = {"ok": True, **respuesta}
@@ -381,23 +418,27 @@ def _ejecutar_paso(accion: str, calcular):
             ds.guardar_respuesta(accion, respuesta, estado)
             estado.update(cambios)
             ds.guardar_estado(nombre)
-        respuesta["secuencia"] = _registrar_fin(numero)
-        return jsonify(respuesta)
-    except PasoRechazado as exc:
-        _registrar_fin(numero, str(exc))
-        return _error(str(exc))
     except Exception as exc:
         _registrar_fin(numero, str(exc))
+        raise
+    respuesta["secuencia"] = _registrar_fin(numero)
+    return respuesta
+
+
+def _ejecutar_paso(accion: str, calcular):
+    """Un paso pedido desde el dashboard, sobre el dataset abierto."""
+    try:
+        with ds.BLOQUEO:
+            nombre = ds.dataset_actual()
+    except Exception as exc:
         return _error(str(exc))
-
-
-class PasoRechazado(Exception):
-    """Un paso que no se puede ejecutar todavía (falta un paso anterior, etc.)."""
-
-
-def _entrenando_este_dataset(nombre: str) -> bool:
-    with _LOCK_ENTRENAMIENTO:
-        return ENTRENAMIENTO["activo"] and ENTRENAMIENTO["dataset"] == nombre
+    if _en_lote(nombre):
+        return _error(f"⚠ «{_nombre_dataset(nombre)}» se está procesando en «Procesar varios». "
+                      "Espera a que termine (la campana te avisa).")
+    try:
+        return jsonify(_correr_paso(nombre, accion, calcular))
+    except Exception as exc:
+        return _error(str(exc))
 
 
 def _fuente_datos(estado) -> str:
@@ -410,209 +451,257 @@ def _fuente_datos(estado) -> str:
 # API — EXPLORACIÓN Y PREPROCESAMIENTO
 # ============================================================
 
+def _calc_explorar(nombre, meta, estado):
+    # Siempre el dataset original: describe el punto de partida del análisis.
+    return pre.explorar_dataset(ds.cargar_dataset(nombre), objetivo=meta["objetivo"]), {}
+
+
+def _calc_preprocesar(nombre, meta, estado):
+    df = ds.cargar_dataset(nombre)
+    if meta["objetivo"] not in df.columns:
+        raise PasoRechazado("⚠ No se puede preprocesar: no existe una variable objetivo válida en este dataset.")
+    if _entrenando_este_dataset(nombre):
+        raise PasoRechazado("⚠ Espera a que termine el entrenamiento en curso antes de volver a preprocesar.")
+    resultado = pre.preprocesar(df, objetivo=meta["objetivo"])
+    cambios = {
+        "df_procesado": resultado["df"], "transformaciones": resultado["transformaciones"],
+        "mapeo_objetivo": resultado["mapeo_objetivo"], "info_columnas_originales": resultado["info_columnas_originales"],
+    }
+    return {k: v for k, v in resultado.items() if k != "df"}, cambios
+
+
 @app.route("/api/explorar")
 def api_explorar():
-    def calcular(nombre, meta, estado):
-        # Siempre el dataset original: describe el punto de partida del análisis.
-        return pre.explorar_dataset(ds.cargar_dataset(nombre), objetivo=meta["objetivo"]), {}
-    return _ejecutar_paso("explorar", calcular)
+    return _ejecutar_paso("explorar", _calc_explorar)
 
 
 @app.route("/api/preprocesar")
 def api_preprocesar():
-    def calcular(nombre, meta, estado):
-        df = ds.cargar_dataset(nombre)
-        if meta["objetivo"] not in df.columns:
-            raise PasoRechazado("⚠ No se puede preprocesar: no existe una variable objetivo válida en este dataset.")
-        if _entrenando_este_dataset(nombre):
-            raise PasoRechazado("⚠ Espera a que termine el entrenamiento en curso antes de volver a preprocesar.")
-        resultado = pre.preprocesar(df, objetivo=meta["objetivo"])
-        cambios = {
-            "df_procesado": resultado["df"], "transformaciones": resultado["transformaciones"],
-            "mapeo_objetivo": resultado["mapeo_objetivo"], "info_columnas_originales": resultado["info_columnas_originales"],
-        }
-        return {k: v for k, v in resultado.items() if k != "df"}, cambios
-    return _ejecutar_paso("preprocesar", calcular)
+    return _ejecutar_paso("preprocesar", _calc_preprocesar)
 
 
 # ============================================================
 # API — ÁLGEBRA LINEAL Y ESTADÍSTICA
 # ============================================================
 
+def _calc_algebra(nombre, meta, estado):
+    resultado = algebra_srv.ejecutar_algebra_lineal()
+    return resultado, {"algebra": resultado}
+
+
+def _calc_estadistica(nombre, meta, estado):
+    resultado = stats.calcular_estadisticas(ds.df_de(estado))
+    resultado["fuente_datos"] = _fuente_datos(estado)
+    return resultado, {"estadistica": resultado}
+
+
+def _calc_outliers(nombre, meta, estado):
+    df = ds.df_de(estado)
+    resultado = stats.detectar_outliers(df)
+    resultado["fuente_datos"] = _fuente_datos(estado)
+    with viz.BLOQUEO:
+        boxplots = viz.generar_boxplots(df, dataset=nombre, objetivo=meta["objetivo"])
+    resultado["boxplots_url"] = boxplots["url"]
+    resultado["boxplots_explicacion"] = boxplots["explicacion"]
+    return resultado, {"outliers": resultado}
+
+
 @app.route("/api/algebra")
 def api_algebra():
-    def calcular(nombre, meta, estado):
-        resultado = algebra_srv.ejecutar_algebra_lineal()
-        return resultado, {"algebra": resultado}
-    return _ejecutar_paso("algebra", calcular)
+    return _ejecutar_paso("algebra", _calc_algebra)
 
 
 @app.route("/api/estadistica")
 def api_estadistica():
-    def calcular(nombre, meta, estado):
-        resultado = stats.calcular_estadisticas(ds.df_de(estado))
-        resultado["fuente_datos"] = _fuente_datos(estado)
-        return resultado, {"estadistica": resultado}
-    return _ejecutar_paso("estadistica", calcular)
+    return _ejecutar_paso("estadistica", _calc_estadistica)
 
 
 @app.route("/api/outliers")
 def api_outliers():
-    def calcular(nombre, meta, estado):
-        df = ds.df_de(estado)
-        resultado = stats.detectar_outliers(df)
-        resultado["fuente_datos"] = _fuente_datos(estado)
-        with viz.BLOQUEO:
-            boxplots = viz.generar_boxplots(df, dataset=nombre, objetivo=meta["objetivo"])
-        resultado["boxplots_url"] = boxplots["url"]
-        resultado["boxplots_explicacion"] = boxplots["explicacion"]
-        return resultado, {"outliers": resultado}
-    return _ejecutar_paso("outliers", calcular)
+    return _ejecutar_paso("outliers", _calc_outliers)
 
 
 # ============================================================
 # API — GRÁFICOS
 # ============================================================
 
+def _calc_graficos(nombre, meta, estado):
+    with viz.BLOQUEO:
+        resultado = viz.generar_graficos(
+            ds.df_de(estado), dataset=nombre, objetivo=meta["objetivo"], mapeo_objetivo=estado.get("mapeo_objetivo")
+        )
+    resultado["fuente_datos"] = _fuente_datos(estado)
+    return resultado, {"graficos": resultado}
+
+
 @app.route("/api/graficos")
 def api_graficos():
-    def calcular(nombre, meta, estado):
-        with viz.BLOQUEO:
-            resultado = viz.generar_graficos(
-                ds.df_de(estado), dataset=nombre, objetivo=meta["objetivo"], mapeo_objetivo=estado.get("mapeo_objetivo")
-            )
-        resultado["fuente_datos"] = _fuente_datos(estado)
-        return resultado, {"graficos": resultado}
-    return _ejecutar_paso("graficos", calcular)
+    return _ejecutar_paso("graficos", _calc_graficos)
 
 
 # ============================================================
 # API — MACHINE LEARNING
 # ============================================================
 
-# El entrenamiento (búsqueda de hiperparámetros) corre en un hilo aparte para que la
-# interfaz pueda seguir preguntando "¿cuánto falta?" mientras tanto. Es una app de un solo
-# usuario local: se entrena un dataset a la vez, y el resultado se guarda en el análisis de
-# ESE dataset aunque la persona haya abierto otro mientras tanto.
-ENTRENAMIENTO = {"activo": False, "dataset": None, "hecho": 0, "total": 0, "listo": False,
-                 "resultado": None, "error": None, "proceso": None}
+# El entrenamiento (búsqueda de hiperparámetros) corre en un hilo aparte para que la interfaz
+# pueda seguir preguntando "¿cuánto falta?" mientras tanto. Se pueden entrenar varios datasets a
+# la vez: cada uno tiene su propio avance en ENTRENAMIENTOS, y TURNOS deja correr solo unos pocos
+# al mismo tiempo (3 o 6, lo elige la persona en «Procesar varios»); los demás esperan en cola.
+# El resultado se guarda en el análisis de ESE dataset aunque la persona haya abierto otro.
+ENTRENAMIENTOS = {}
 _LOCK_ENTRENAMIENTO = threading.Lock()
+A_LA_VEZ_PERMITIDOS = (3, 6)
+TURNOS = TurnoJusto(3)
 
 
-def _entrenar_en_segundo_plano(nombre: str, meta: dict, datos: dict, info_columnas: list, numero: int):
+def _entrenamiento_vacio(numero: int = None) -> dict:
+    return {"activo": numero is not None, "en_cola": True, "hecho": 0, "total": 0, "listo": False,
+            "resultado": None, "error": None, "proceso": numero}
+
+
+def _entrenando_este_dataset(nombre: str) -> bool:
+    with _LOCK_ENTRENAMIENTO:
+        return bool(ENTRENAMIENTOS.get(nombre, {}).get("activo"))
+
+
+def _avance_entrenamiento(nombre: str):
+    """(porcentaje, en_cola) del entrenamiento de un dataset."""
+    with _LOCK_ENTRENAMIENTO:
+        e = ENTRENAMIENTOS.get(nombre) or {}
+        pct = round(e["hecho"] / e["total"] * 100) if e.get("total") else 0
+        return pct, bool(e.get("en_cola"))
+
+
+def _preparar_entrenamiento(nombre: str):
+    """Revisa que se pueda entrenar y deja los datos listos. Lanza PasoRechazado si falta algo."""
+    meta = ds.obtener_metadata(nombre)
+    with ds.BLOQUEO:
+        estado = ds.estado_de(nombre)
+        if estado["df_procesado"] is None:
+            raise PasoRechazado('⚠ Preprocesa el dataset antes de entrenar el modelo (botón "Preprocesar").')
+        info_columnas = estado["info_columnas_originales"]
+    if "preprocesar" in _en_curso(nombre):
+        raise PasoRechazado("⚠ Espera a que termine el preprocesamiento.")
+    df = ds.cargar_dataset(nombre)
+    if meta["objetivo"] not in df.columns:
+        raise PasoRechazado("⚠ No se puede entrenar el modelo porque no existe una variable objetivo.")
+    return meta, pre.preparar_para_modelo(df, meta["objetivo"]), info_columnas
+
+
+def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict:
+    """Entrena y guarda el resultado en el análisis del dataset. Actualiza ENTRENAMIENTOS[nombre]
+    con el avance. Devuelve lo que se muestra en el dashboard; si falla, lanza la excepción."""
     def _reportar_progreso(hecho, total):
         with _LOCK_ENTRENAMIENTO:
-            ENTRENAMIENTO["hecho"] = hecho
-            ENTRENAMIENTO["total"] = total
+            ENTRENAMIENTOS[nombre].update({"hecho": hecho, "total": total})
 
-    try:
-        resultado = ml.entrenar(datos, objetivo=meta["objetivo"], on_progreso=_reportar_progreso)
-        mejor_nombre = resultado["mejor_modelo_nombre"]
-        metricas_mejor = resultado["comparacion"][mejor_nombre]
+    resultado = ml.entrenar(datos, objetivo=meta["objetivo"], on_progreso=_reportar_progreso)
+    mejor_nombre = resultado["mejor_modelo_nombre"]
+    metricas_mejor = resultado["comparacion"][mejor_nombre]
 
-        with viz.BLOQUEO:
-            comparacion_chart = viz.generar_comparacion_modelos_chart(
-                resultado["comparacion"], resultado["problema"], dataset=nombre
-            )
-            importancia = viz.generar_importancia_variables(
-                resultado["mejor_modelo"].named_steps["modelo"], resultado["columnas_features"], dataset=nombre
-            )
+    with viz.BLOQUEO:
+        comparacion_chart = viz.generar_comparacion_modelos_chart(
+            resultado["comparacion"], resultado["problema"], dataset=nombre
+        )
+        importancia = viz.generar_importancia_variables(
+            resultado["mejor_modelo"].named_steps["modelo"], resultado["columnas_features"], dataset=nombre
+        )
 
-        payload = {
-            "ok": True, "problema": resultado["problema"],
-            "mejor_modelo": mejor_nombre,
-            "modelos_disponibles": list(resultado["comparacion"].keys()),
-            "comparacion": resultado["comparacion"],
-            "parametros": resultado["parametros"],
-            "particiones": resultado["particiones"],
+    payload = {
+        "ok": True, "problema": resultado["problema"],
+        "mejor_modelo": mejor_nombre,
+        "modelos_disponibles": list(resultado["comparacion"].keys()),
+        "comparacion": resultado["comparacion"],
+        "parametros": resultado["parametros"],
+        "particiones": resultado["particiones"],
+        "columnas_features": resultado["columnas_features"],
+        "filas_entrenamiento": int(resultado["X_train"].shape[0]),
+        "filas_prueba": int(resultado["X_test"].shape[0]),
+        "comparacion_chart_url": comparacion_chart["url"],
+        "comparacion_chart_explicacion": comparacion_chart["explicacion"],
+        "importancia_url": importancia["url"],
+        "importancia_explicacion": importancia["explicacion"],
+        "importancia_disponible": importancia["disponible"],
+        "info_columnas_originales": info_columnas,
+        "objetivo": str(meta["objetivo"]),
+    }
+
+    with ds.BLOQUEO:
+        estado = ds.estado_de(nombre)
+        ds.guardar_respuesta("entrenar", payload, estado)
+        estado.update({
+            "problema": resultado["problema"],
+            "X_train": resultado["X_train"], "X_test": resultado["X_test"],
+            "y_train": resultado["y_train"], "y_test": resultado["y_test"],
+            "modelo": resultado["mejor_modelo"], "nombre_modelo": mejor_nombre,
+            "modelos_entrenados": resultado["modelos_entrenados"],
+            "predicciones_por_modelo": resultado["y_pred_por_modelo"],
+            "y_pred": resultado["y_pred"], "comparacion_modelos": resultado["comparacion"],
             "columnas_features": resultado["columnas_features"],
-            "filas_entrenamiento": int(resultado["X_train"].shape[0]),
-            "filas_prueba": int(resultado["X_test"].shape[0]),
+            "parametros_modelos": resultado["parametros"],
+            "particiones": resultado["particiones"],
+            "mapeo_objetivo": datos["mapeo_objetivo"],
+            "metricas": metricas_mejor,
             "comparacion_chart_url": comparacion_chart["url"],
             "comparacion_chart_explicacion": comparacion_chart["explicacion"],
             "importancia_url": importancia["url"],
             "importancia_explicacion": importancia["explicacion"],
             "importancia_disponible": importancia["disponible"],
-            "info_columnas_originales": info_columnas,
-            "objetivo": str(meta["objetivo"]),
-        }
-
-        with ds.BLOQUEO:
-            estado = ds.estado_de(nombre)
-            ds.guardar_respuesta("entrenar", payload, estado)
-            estado.update({
-                "problema": resultado["problema"],
-                "X_train": resultado["X_train"], "X_test": resultado["X_test"],
-                "y_train": resultado["y_train"], "y_test": resultado["y_test"],
-                "modelo": resultado["mejor_modelo"], "nombre_modelo": mejor_nombre,
-                "modelos_entrenados": resultado["modelos_entrenados"],
-                "predicciones_por_modelo": resultado["y_pred_por_modelo"],
-                "y_pred": resultado["y_pred"], "comparacion_modelos": resultado["comparacion"],
-                "columnas_features": resultado["columnas_features"],
-                "parametros_modelos": resultado["parametros"],
-                "particiones": resultado["particiones"],
-                "mapeo_objetivo": datos["mapeo_objetivo"],
-                "metricas": metricas_mejor,
-                "comparacion_chart_url": comparacion_chart["url"],
-                "comparacion_chart_explicacion": comparacion_chart["explicacion"],
-                "importancia_url": importancia["url"],
-                "importancia_explicacion": importancia["explicacion"],
-                "importancia_disponible": importancia["disponible"],
-            })
-            ds.guardar_estado(nombre)
-
-        _guardar_en_historial({
-            "dataset": meta["nombre"], "fecha": datetime.now().strftime("%d/%m/%Y %H:%M"),
-            "modelo": mejor_nombre, "problema": resultado["problema"],
-            "metrica_principal": (
-                f"Accuracy {metricas_mejor['accuracy']*100:.2f}%" if resultado["problema"] == "clasificacion"
-                else f"R² {metricas_mejor['r2']:.3f}"
-            ),
-            "estado": "Completado",
         })
+        ds.guardar_estado(nombre)
 
+    _guardar_en_historial({
+        "dataset": meta["nombre"], "fecha": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "modelo": mejor_nombre, "problema": resultado["problema"],
+        "metrica_principal": (
+            f"Accuracy {metricas_mejor['accuracy']*100:.2f}%" if resultado["problema"] == "clasificacion"
+            else f"R² {metricas_mejor['r2']:.3f}"
+        ),
+        "estado": "Completado",
+    })
+    return payload
+
+
+def _entrenar_desde_dashboard(nombre: str, meta: dict, datos: dict, info_columnas: list, numero: int):
+    """Hilo del botón «Entrenar Modelo»: espera su turno y entrena."""
+    try:
+        with TURNOS:
+            with _LOCK_ENTRENAMIENTO:
+                ENTRENAMIENTOS[nombre]["en_cola"] = False
+            payload = _entrenar(nombre, meta, datos, info_columnas)
         payload["secuencia"] = _registrar_fin(numero)
         with _LOCK_ENTRENAMIENTO:
-            ENTRENAMIENTO.update({"resultado": payload, "listo": True, "activo": False})
+            ENTRENAMIENTOS[nombre].update({"resultado": payload, "listo": True, "activo": False})
     except Exception as exc:
         _registrar_fin(numero, str(exc))
         with _LOCK_ENTRENAMIENTO:
-            ENTRENAMIENTO.update({"error": str(exc), "listo": True, "activo": False})
+            ENTRENAMIENTOS[nombre].update({"error": str(exc), "listo": True, "activo": False})
 
 
 @app.route("/api/entrenar/iniciar")
 def api_entrenar_iniciar():
     try:
-        with ds.BLOQUEO, _LOCK_ENTRENAMIENTO:
+        with ds.BLOQUEO:
             nombre = ds.dataset_actual()
-            if ENTRENAMIENTO["activo"]:
-                if ENTRENAMIENTO["dataset"] == nombre:
-                    return jsonify({"ok": True, "iniciado": False, "en_curso": True})
-                otro = ds.obtener_metadata(ENTRENAMIENTO["dataset"])["nombre"]
-                return _error(f'⚠ Se está entrenando el dataset "{otro}". Espera a que termine para entrenar este.')
-
-            meta = ds.obtener_metadata(nombre)
-            estado = ds.estado_de(nombre)
-            if estado["df_procesado"] is None:
-                return _error('⚠ Preprocesa el dataset antes de entrenar el modelo (botón "Preprocesar").')
-            if "preprocesar" in _en_curso(nombre):
-                return _error("⚠ Espera a que termine el preprocesamiento.")
-            df = ds.cargar_dataset(nombre)
-            if meta["objetivo"] not in df.columns:
-                return _error("⚠ No se puede entrenar el modelo porque no existe una variable objetivo.")
-
-            datos = pre.preparar_para_modelo(df, meta["objetivo"])
-            info_columnas = estado["info_columnas_originales"]
+        if _en_lote(nombre):
+            return _error(f"⚠ «{_nombre_dataset(nombre)}» se está procesando en «Procesar varios». "
+                          "Espera a que termine (la campana te avisa).")
+        with _LOCK_ENTRENAMIENTO:
+            if ENTRENAMIENTOS.get(nombre, {}).get("activo"):
+                return jsonify({"ok": True, "iniciado": False, "en_curso": True})
+        try:
+            meta, datos, info_columnas = _preparar_entrenamiento(nombre)
+        except PasoRechazado as exc:
+            return _error(str(exc))
+        with _LOCK_ENTRENAMIENTO:
+            if ENTRENAMIENTOS.get(nombre, {}).get("activo"):
+                return jsonify({"ok": True, "iniciado": False, "en_curso": True})
             numero = _registrar_inicio(nombre, "entrenar")
-            ENTRENAMIENTO.update({
-                "activo": True, "dataset": nombre, "hecho": 0, "total": 0,
-                "listo": False, "resultado": None, "error": None, "proceso": numero,
-            })
+            ENTRENAMIENTOS[nombre] = _entrenamiento_vacio(numero)
 
-        hilo = threading.Thread(
-            target=_entrenar_en_segundo_plano, args=(nombre, meta, datos, info_columnas, numero), daemon=True
-        )
-        hilo.start()
+        threading.Thread(
+            target=_entrenar_desde_dashboard, args=(nombre, meta, datos, info_columnas, numero), daemon=True
+        ).start()
         return jsonify({"ok": True, "iniciado": True})
     except Exception as exc:
         return _error(str(exc))
@@ -620,18 +709,197 @@ def api_entrenar_iniciar():
 
 @app.route("/api/entrenar/progreso")
 def api_entrenar_progreso():
+    try:
+        nombre = ds.dataset_actual()
+    except Exception as exc:
+        return _error(str(exc))
     with _LOCK_ENTRENAMIENTO:
-        copia = dict(ENTRENAMIENTO)
+        copia = dict(ENTRENAMIENTOS.get(nombre) or _entrenamiento_vacio())
 
     pct = round((copia["hecho"] / copia["total"]) * 100, 1) if copia["total"] else 0.0
     if copia["error"]:
         return _error(copia["error"])
 
-    respuesta = {"ok": True, "dataset": copia["dataset"], "hecho": copia["hecho"], "total": copia["total"],
-                 "pct": pct, "listo": copia["listo"]}
+    respuesta = {"ok": True, "dataset": nombre, "hecho": copia["hecho"], "total": copia["total"],
+                 "pct": pct, "listo": copia["listo"], "en_cola": copia["activo"] and copia["en_cola"]}
     if copia["listo"] and copia["resultado"]:
         respuesta.update(copia["resultado"])
     return jsonify(respuesta)
+
+
+# ============================================================
+# PROCESAR VARIOS: los pasos elegidos, en varios datasets a la vez
+# ============================================================
+# Cada dataset elegido es un «trabajo» que espera su turno (TURNOS) y hace sus pasos en orden.
+# Los pasos ya hechos no se repiten. Si un paso falla, ese dataset se detiene y los demás siguen.
+
+ORDEN_PASOS = ["explorar", "preprocesar", "algebra", "estadistica", "outliers", "graficos", "entrenar", "evaluar", "pdf"]
+# Lo que cada paso necesita antes: no se puede entrenar sin preprocesar, ni evaluar sin entrenar.
+NECESITA = {"entrenar": ["preprocesar"], "evaluar": ["preprocesar", "entrenar"]}
+# Cuánto tarda cada paso, más o menos, para repartir la barra de avance de cada dataset.
+PESO_PASO = {"explorar": 1, "preprocesar": 1, "algebra": 1, "estadistica": 1, "outliers": 1,
+             "graficos": 2, "entrenar": 5, "evaluar": 1, "pdf": 3}
+
+LOTE = {}
+_LOCK_LOTE = threading.Lock()
+
+
+def _en_lote(nombre: str) -> bool:
+    with _LOCK_LOTE:
+        return any(t["dataset"] == nombre and t["fase"] in ("cola", "procesando") for t in LOTE.values())
+
+
+def pasos_con_necesarios(pasos) -> list:
+    elegidos = set(pasos)
+    for paso in list(elegidos):
+        elegidos.update(NECESITA.get(paso, []))
+    return [p for p in ORDEN_PASOS if p in elegidos]
+
+
+def _ya_hecho(nombre: str, paso: str) -> bool:
+    with ds.BLOQUEO:
+        estado = ds.estado_de(nombre)
+        if paso not in estado["respuestas"]:
+            return False
+        if paso == "preprocesar":
+            return estado["df_procesado"] is not None
+        if paso in ("entrenar", "evaluar"):
+            return estado.get("modelo") is not None
+        if paso == "pdf":
+            return os.path.isfile(_ruta_pdf(nombre))
+        return True
+
+
+def _trabajo_actualizar(trabajo: dict, **cambios):
+    with _LOCK_LOTE:
+        trabajo.update(cambios)
+
+
+def _procesar_trabajo(trabajo: dict):
+    nombre = trabajo["dataset"]
+    try:
+        with TURNOS:
+            _trabajo_actualizar(trabajo, fase="procesando")
+            for paso in trabajo["pasos"]:
+                _trabajo_actualizar(trabajo, actual=paso)
+                if _ya_hecho(nombre, paso):
+                    with _LOCK_LOTE:
+                        trabajo["omitidos"].append(paso)
+                        trabajo["hechos"].append(paso)
+                    continue
+                if paso == "entrenar":
+                    _entrenar_en_lote(nombre)
+                else:
+                    _correr_paso(nombre, paso, CALCULOS[paso], lote=True)
+                with _LOCK_LOTE:
+                    trabajo["hechos"].append(paso)
+        _trabajo_actualizar(trabajo, fase="listo", actual=None, fin=datetime.now().strftime("%H:%M"))
+        error = None
+    except Exception as exc:
+        error = str(exc)
+        _trabajo_actualizar(trabajo, fase="error", error=error)
+    with _LOCK_ACTIVIDAD:
+        _agregar_aviso(nombre, "lote", error)
+
+
+def _entrenar_en_lote(nombre: str):
+    # Si justo se está entrenando desde el dashboard, se espera a que termine y se usa ese modelo.
+    while _entrenando_este_dataset(nombre):
+        threading.Event().wait(1)
+    if _ya_hecho(nombre, "entrenar"):
+        return
+    meta, datos, info_columnas = _preparar_entrenamiento(nombre)
+    with _LOCK_ENTRENAMIENTO:
+        numero = _registrar_inicio(nombre, "entrenar", lote=True)
+        ENTRENAMIENTOS[nombre] = {**_entrenamiento_vacio(numero), "en_cola": False}
+    try:
+        payload = _entrenar(nombre, meta, datos, info_columnas)
+    except Exception as exc:
+        _registrar_fin(numero, str(exc))
+        with _LOCK_ENTRENAMIENTO:
+            ENTRENAMIENTOS[nombre].update({"error": str(exc), "listo": True, "activo": False})
+        raise
+    payload["secuencia"] = _registrar_fin(numero)
+    with _LOCK_ENTRENAMIENTO:
+        ENTRENAMIENTOS[nombre].update({"resultado": payload, "listo": True, "activo": False})
+
+
+def _trabajos_de_lote() -> list:
+    """Los trabajos de «Procesar varios» con su avance, en el orden en que se pidieron."""
+    with _LOCK_LOTE:
+        trabajos = [dict(t, hechos=list(t["hechos"]), omitidos=list(t["omitidos"])) for t in LOTE.values()]
+    for t in sorted(trabajos, key=lambda x: x["id"]):
+        total = sum(PESO_PASO[p] for p in t["pasos"])
+        hecho = sum(PESO_PASO[p] for p in t["hechos"])
+        t["paso_pct"] = 0
+        if t["fase"] == "procesando" and t.get("actual") == "entrenar":
+            t["paso_pct"], _ = _avance_entrenamiento(t["dataset"])
+            hecho += PESO_PASO["entrenar"] * t["paso_pct"] / 100
+        t["avance"] = 100 if t["fase"] == "listo" else round(hecho / total * 100) if total else 0
+        t["nombre_dataset"] = _nombre_dataset(t["dataset"])
+        t["url"] = _url_dataset(t["dataset"])
+        t["color"] = ds.DATASETS.get(t["dataset"], {}).get("color_a")
+    return sorted(trabajos, key=lambda x: x["id"])
+
+
+@app.route("/procesar-varios")
+def procesar_varios_pagina():
+    elegir = [n for n in request.args.get("elegir", "").split(",") if n in ds.DATASETS]
+    return render_template("procesar.html", datasets=_datasets_para_elegir(), elegir=elegir,
+                           a_la_vez=TURNOS.cupos, a_la_vez_permitidos=A_LA_VEZ_PERMITIDOS)
+
+
+def _datasets_para_elegir() -> list:
+    lista = []
+    for meta in ds.listar_datasets():
+        try:
+            filas, columnas = ds.cargar_dataset(meta["id"]).shape
+        except Exception:
+            filas = columnas = None
+        origen = (meta.get("formato") or "subido") if meta["subido"] else "incluido"
+        lista.append({**meta, "filas": filas, "columnas": columnas, "origen": origen})
+    return lista
+
+
+@app.route("/api/lote", methods=["POST"])
+def api_lote():
+    datos = request.get_json(silent=True) or {}
+    nombres = [n for n in (datos.get("datasets") or []) if n in ds.DATASETS]
+    pasos = pasos_con_necesarios([p for p in (datos.get("pasos") or []) if p in ORDEN_PASOS])
+    if not nombres:
+        return _error("Elige al menos un dataset.")
+    if not pasos:
+        return _error("Elige al menos un paso.")
+    if datos.get("a_la_vez") in A_LA_VEZ_PERMITIDOS:
+        TURNOS.cambiar_cupos(datos["a_la_vez"])
+
+    nuevos, ya_estaban = [], []
+    with _LOCK_LOTE:
+        for nombre in nombres:
+            if any(t["dataset"] == nombre and t["fase"] in ("cola", "procesando") for t in LOTE.values()):
+                ya_estaban.append(_nombre_dataset(nombre))
+                continue
+            # Un dataset terminado antes se reemplaza por el nuevo pedido.
+            for clave in [c for c, t in LOTE.items() if t["dataset"] == nombre]:
+                del LOTE[clave]
+            trabajo = {"id": f"{datetime.now().timestamp():.6f}-{nombre}", "dataset": nombre, "pasos": pasos,
+                       "hechos": [], "omitidos": [], "actual": None, "fase": "cola", "error": None,
+                       "creado": datetime.now().isoformat(timespec="seconds")}
+            LOTE[trabajo["id"]] = trabajo
+            nuevos.append(trabajo)
+    for trabajo in nuevos:
+        threading.Thread(target=_procesar_trabajo, args=(trabajo,), daemon=True).start()
+    return jsonify({"ok": True, "agregados": len(nuevos), "ya_estaban": ya_estaban, "pasos": pasos,
+                    "a_la_vez": TURNOS.cupos})
+
+
+@app.route("/api/lote/a-la-vez", methods=["POST"])
+def api_lote_a_la_vez():
+    cupos = (request.get_json(silent=True) or {}).get("a_la_vez")
+    if cupos not in A_LA_VEZ_PERMITIDOS:
+        return _error("Elige 3 o 6 a la vez.")
+    TURNOS.cambiar_cupos(cupos)
+    return jsonify({"ok": True, "a_la_vez": cupos})
 
 
 def _modelo_pedido(estado, nombre_pedido):
@@ -687,17 +955,19 @@ def api_evaluar():
     except Exception as exc:
         return _error(str(exc))
 
-    def calcular(nombre, meta, estado):
-        if estado["modelo"] is None:
-            raise PasoRechazado('⚠ Entrena un modelo antes de evaluarlo (botón "Entrenar Modelo").')
-        respuesta = _evaluacion(nombre, estado, estado["nombre_modelo"])
-        pd.DataFrame(respuesta["predicciones"]).to_csv(os.path.join(RESULTADOS_DIR, "predicciones.csv"), index=False)
-        return respuesta, {
-            "predicciones": respuesta["predicciones"],
-            "matriz_confusion_url": respuesta.get("matriz_confusion_url"),
-            "real_vs_prediccion_url": respuesta.get("real_vs_prediccion_url"),
-        }
-    return _ejecutar_paso("evaluar", calcular)
+    return _ejecutar_paso("evaluar", _calc_evaluar)
+
+
+def _calc_evaluar(nombre, meta, estado):
+    if estado["modelo"] is None:
+        raise PasoRechazado('⚠ Entrena un modelo antes de evaluarlo (botón "Entrenar Modelo").')
+    respuesta = _evaluacion(nombre, estado, estado["nombre_modelo"])
+    pd.DataFrame(respuesta["predicciones"]).to_csv(os.path.join(RESULTADOS_DIR, "predicciones.csv"), index=False)
+    return respuesta, {
+        "predicciones": respuesta["predicciones"],
+        "matriz_confusion_url": respuesta.get("matriz_confusion_url"),
+        "real_vs_prediccion_url": respuesta.get("real_vs_prediccion_url"),
+    }
 
 
 def _formatear_prediccion(cruda, problema, mapeo):
@@ -753,7 +1023,7 @@ def api_predecir_lote():
             archivo = request.files.get("archivo")
             if archivo is None or not archivo.filename:
                 return _error("Sube un archivo CSV o Excel con los casos nuevos.")
-            df, _ = _leer_archivo_subido(archivo, minimo_columnas=1)
+            df, _, _ = _leer_archivo_subido(archivo, minimo_columnas=1)
             df.columns = [str(c) for c in df.columns]
 
             nombre_modelo, modelo = _modelo_pedido(estado, request.form.get("modelo"))
@@ -832,57 +1102,67 @@ _LOCK_PDF = threading.Lock()
 
 @app.route("/generar-pdf")
 def generar_pdf():
-    def calcular(nombre, meta, estado):
-        original = ds.cargar_dataset(nombre)
-        resultado = {
-            "dataset_meta": meta,
-            # Siempre el dataset ORIGINAL (nunca el ya preprocesado): esta sección describe el
-            # punto de partida del análisis, y debe coincidir con la columna "Antes" de la
-            # sección de Preprocesamiento, sin importar si ya se preprocesó antes de pedir el PDF.
-            "exploracion": pre.explorar_dataset(original, objetivo=meta["objetivo"]),
-            "preprocesamiento": None,
-            "algebra": estado.get("algebra"),
-            "estadistica": estado.get("estadistica"),
-            "outliers": estado.get("outliers"),
-            "graficos": estado.get("graficos"),
-            "entrenamiento": None,
-            "comparacion": estado.get("comparacion_modelos"),
-            "parametros_modelos": estado.get("parametros_modelos"),
-            "metrica_principal": estado.get("metricas"),
-            "matriz_confusion_url": estado.get("matriz_confusion_url"),
-            "real_vs_prediccion_url": estado.get("real_vs_prediccion_url"),
-            "predicciones": estado.get("predicciones"),
-            "comparacion_chart_url": estado.get("comparacion_chart_url"),
-            "comparacion_chart_explicacion": estado.get("comparacion_chart_explicacion"),
-            "importancia_url": estado.get("importancia_url"),
-            "importancia_explicacion": estado.get("importancia_explicacion"),
-            "importancia_disponible": estado.get("importancia_disponible"),
-            "filas_prueba": int(estado["X_test"].shape[0]) if estado.get("X_test") is not None else None,
-        }
-        if estado.get("df_procesado") is not None:
-            resultado["preprocesamiento"] = {
-                "antes": _resumen_basico(original),
-                "despues": _resumen_basico(estado["df_procesado"]),
-                "transformaciones": estado.get("transformaciones") or [],
-            }
-        if estado.get("modelo") is not None:
-            resultado["entrenamiento"] = {
-                "problema": estado["problema"],
-                "mejor_modelo_nombre": estado["nombre_modelo"],
-                "particiones": estado.get("particiones"),
-            }
+    return _ejecutar_paso("pdf", _calc_pdf)
 
-        ruta_pdf = _ruta_pdf(nombre)
-        # El tema de colores del PDF es global dentro de pdf_service: un informe a la vez.
-        with _LOCK_PDF:
-            pdf_srv.generar_pdf(resultado, ruta_pdf)
-        marca = int(os.path.getmtime(ruta_pdf))
-        return {
-            "mensaje": "✅ Informe PDF generado correctamente",
-            "ver_url": url_for("ver_pdf", nombre=nombre, v=marca),
-            "descargar_url": url_for("descargar_pdf", nombre=nombre, v=marca),
-        }, {}
-    return _ejecutar_paso("pdf", calcular)
+
+def _calc_pdf(nombre, meta, estado):
+    original = ds.cargar_dataset(nombre)
+    resultado = {
+        "dataset_meta": meta,
+        # Siempre el dataset ORIGINAL (nunca el ya preprocesado): esta sección describe el
+        # punto de partida del análisis, y debe coincidir con la columna "Antes" de la
+        # sección de Preprocesamiento, sin importar si ya se preprocesó antes de pedir el PDF.
+        "exploracion": pre.explorar_dataset(original, objetivo=meta["objetivo"]),
+        "preprocesamiento": None,
+        "algebra": estado.get("algebra"),
+        "estadistica": estado.get("estadistica"),
+        "outliers": estado.get("outliers"),
+        "graficos": estado.get("graficos"),
+        "entrenamiento": None,
+        "comparacion": estado.get("comparacion_modelos"),
+        "parametros_modelos": estado.get("parametros_modelos"),
+        "metrica_principal": estado.get("metricas"),
+        "matriz_confusion_url": estado.get("matriz_confusion_url"),
+        "real_vs_prediccion_url": estado.get("real_vs_prediccion_url"),
+        "predicciones": estado.get("predicciones"),
+        "comparacion_chart_url": estado.get("comparacion_chart_url"),
+        "comparacion_chart_explicacion": estado.get("comparacion_chart_explicacion"),
+        "importancia_url": estado.get("importancia_url"),
+        "importancia_explicacion": estado.get("importancia_explicacion"),
+        "importancia_disponible": estado.get("importancia_disponible"),
+        "filas_prueba": int(estado["X_test"].shape[0]) if estado.get("X_test") is not None else None,
+    }
+    if estado.get("df_procesado") is not None:
+        resultado["preprocesamiento"] = {
+            "antes": _resumen_basico(original),
+            "despues": _resumen_basico(estado["df_procesado"]),
+            "transformaciones": estado.get("transformaciones") or [],
+        }
+    if estado.get("modelo") is not None:
+        resultado["entrenamiento"] = {
+            "problema": estado["problema"],
+            "mejor_modelo_nombre": estado["nombre_modelo"],
+            "particiones": estado.get("particiones"),
+        }
+
+    ruta_pdf = _ruta_pdf(nombre)
+    # El tema de colores del PDF es global dentro de pdf_service: un informe a la vez.
+    with _LOCK_PDF:
+        pdf_srv.generar_pdf(resultado, ruta_pdf)
+    marca = int(os.path.getmtime(ruta_pdf))
+    return {
+        "mensaje": "✅ Informe PDF generado correctamente",
+        "ver_url": f"/ver-pdf/{nombre}?v={marca}",
+        "descargar_url": f"/descargar-pdf/{nombre}?v={marca}",
+    }, {}
+
+
+# Cálculo de cada paso (el entrenamiento va aparte, en su hilo con avance).
+CALCULOS = {
+    "explorar": _calc_explorar, "preprocesar": _calc_preprocesar, "algebra": _calc_algebra,
+    "estadistica": _calc_estadistica, "outliers": _calc_outliers, "graficos": _calc_graficos,
+    "evaluar": _calc_evaluar, "pdf": _calc_pdf,
+}
 
 
 def _enviar_pdf(nombre: str, descargar: bool):
