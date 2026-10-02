@@ -22,6 +22,7 @@ DÓNDE SE GUARDA TU TRABAJO
 CÓMO SE USA
   Al abrir DataExpert IA aparece una ventana pequeña y se abre la aplicación en el navegador (http://127.0.0.1:5050 o el siguiente puerto libre).
   Si cambias de página mientras se calcula un paso, sigue calculando y la campana de arriba te avisa al terminar.
+  Cada aviso de la campana se borra solo cuando entras a ver ese dataset; lo del dataset que tienes abierto no aparece en la campana.
   Con «Procesar varios» puedes analizar varios datasets a la vez (3 o 6 al mismo tiempo).
   Para cerrarla, pulsa "Cerrar DataExpert IA" en esa ventana (si todavía se está calculando algo te avisa).
 

@@ -298,8 +298,8 @@ def api_color(nombre):
 _LOCK_ACTIVIDAD = threading.Lock()
 ACTIVIDAD = {"secuencia": 0, "activos": {}, "terminados": deque(maxlen=60)}
 # Avisos de la campana: cada paso terminado desde un dataset (explorar, gráficos, entrenar, PDF…) y
-# cada dataset terminado en «Procesar varios». Quedan hasta que la persona los limpia con la escoba;
-# si el mismo paso del mismo dataset se vuelve a hacer, queda solo el último aviso.
+# cada dataset terminado en «Procesar varios». Salen solos cuando la persona está en la página de
+# ese dataset (ya lo está viendo) o al limpiarlos con la escoba; si el mismo paso del mismo dataset se vuelve a hacer, queda solo el último aviso.
 AVISOS = deque(maxlen=60)
 
 
@@ -353,6 +353,7 @@ def api_actividad():
     for proceso in activos + terminados + avisos:
         proceso["nombre_dataset"] = _nombre_dataset(proceso["dataset"])
         proceso["url"] = _url_dataset(proceso["dataset"])
+        proceso["color"] = ds.DATASETS.get(proceso["dataset"], {}).get("color_a")
     for proceso in activos:
         if proceso["accion"] == "entrenar":
             proceso["pct"], proceso["en_cola"] = _avance_entrenamiento(proceso["dataset"])
@@ -367,6 +368,19 @@ def api_limpiar_avisos():
         AVISOS.clear()
     with _LOCK_LOTE:
         for clave in [c for c, t in LOTE.items() if t["fase"] in ("listo", "error")]:
+            del LOTE[clave]
+    return jsonify({"ok": True})
+
+
+@app.route("/api/avisos/visto", methods=["POST"])
+def api_aviso_visto():
+    """La persona está en la página de ese dataset: sus avisos terminados salen solos de la campana."""
+    nombre = (request.get_json(silent=True) or {}).get("dataset")
+    with _LOCK_ACTIVIDAD:
+        for aviso in [a for a in AVISOS if a["dataset"] == nombre]:
+            AVISOS.remove(aviso)
+    with _LOCK_LOTE:
+        for clave in [c for c, t in LOTE.items() if t["dataset"] == nombre and t["fase"] in ("listo", "error")]:
             del LOTE[clave]
     return jsonify({"ok": True})
 

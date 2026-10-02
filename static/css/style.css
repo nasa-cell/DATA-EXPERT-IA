@@ -423,7 +423,7 @@ input:focus, select:focus { outline: none; box-shadow: 4px 4px 0 var(--tinta); t
 }
 .campana .icono svg { width: 22px; height: 22px; }
 .campana:active { transform: translate(3px, 3px); box-shadow: none; }
-.campana.suena .icono { animation: sonar 1s ease-in-out 2; transform-origin: 50% 10%; }
+.campana.suena .icono { animation: sonar 1.1s ease-in-out 4; transform-origin: 50% 10%; }
 @keyframes sonar { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(16deg); } 30% { transform: rotate(-14deg); } 45% { transform: rotate(10deg); } 60% { transform: rotate(-6deg); } 75% { transform: rotate(3deg); } }
 .campana-avance { position: absolute; left: 4px; right: 4px; bottom: 3px; height: 4px; border-radius: 999px; background: var(--claro); overflow: hidden; }
 .campana-avance span { display: block; height: 100%; width: 0; background: var(--rosa); transition: width 600ms ease-out; }
