@@ -20,6 +20,9 @@ de datos, preprocesamiento, álgebra lineal, estadística (incluyendo implementa
 manuales de varianza y desviación estándar, para verificar el resultado de NumPy),
 detección de valores atípicos, visualización, entrenamiento y evaluación de modelos, y
 generación automática de un informe PDF con los resultados reales de cada ejecución.
+Además, permite repetir ese flujo sobre varios datasets a la vez (por ejemplo, entrenar y
+comparar modelos en todos los datasets de un equipo de una sola vez), con el avance a la vista
+y un aviso cuando cada uno termina.
 
 ## 3. Objetivos
 
@@ -37,8 +40,10 @@ generación automática de un informe PDF con los resultados reales de cada ejec
 El sistema sigue el flujo estándar de un proyecto de ciencia de datos, expuesto como una
 serie de acciones independientes que el usuario dispara desde la interfaz:
 
-1. **Selección del dataset**: el usuario elige uno de los 9 datasets incluidos (o sube el suyo
-   en CSV/Excel); no se requiere preparar archivos externos.
+1. **Selección del dataset**: el usuario elige uno de los 9 datasets incluidos o sube los
+   suyos en CSV/Excel, uno o varios a la vez. Por cada archivo el sistema informa cuántas
+   columnas y filas detectó (y si hay columnas vacías o encabezados repetidos) y muestra una
+   vista previa donde se eligen las columnas a usar y la que se quiere predecir.
 2. **Exploración** (`pandas`): dimensiones, tipos de datos, nulos, duplicados y
    estadísticas descriptivas iniciales.
 3. **Preprocesamiento**: imputación de nulos (media para variables numéricas, moda para
@@ -61,6 +66,9 @@ serie de acciones independientes que el usuario dispara desde la interfaz:
    MAE, MSE, RMSE y R² para regresión — más matriz de confusión o gráfico real-vs-predicho.
 10. **Informe**: un PDF que reúne todos los resultados anteriores de la sesión de análisis
     en curso.
+11. **Procesar varios**: el mismo flujo se puede lanzar de una vez sobre varios datasets,
+    eligiendo qué pasos hacer (todos, solo entrenar, solo explorar o uno por uno). Se explica
+    en la sección 10.
 
 ## 5. Datasets
 
@@ -71,6 +79,12 @@ construye a partir de una relación matemática real entre sus variables (por ej
 precio de una vivienda depende linealmente del área, número de habitaciones, baños,
 antigüedad y ubicación, más ruido gaussiano), de forma que el modelo entrenado sobre ellos
 efectivamente aprende un patrón real y no memoriza etiquetas arbitrarias.
+
+Las columnas y categorías de los 9 datasets están en español, para que las tablas, los
+gráficos, las predicciones y el informe PDF se lean sin traducir: por ejemplo, Viviendas tiene
+`superficie`, `dormitorios`, `baños`, `antigüedad`, `puntaje_ubicación` y `precio`, e Iris tiene
+`largo_sépalo`, `ancho_sépalo`, `largo_pétalo`, `ancho_pétalo` y `especie`. Solo cambian los
+nombres: los valores numéricos son los mismos.
 
 ## 6. Pandas y NumPy
 
@@ -107,8 +121,11 @@ Forest y Logistic Regression** para clasificación, y **Linear Regression, Decis
 Random Forest** para regresión. A cada uno se le buscan los mejores hiperparámetros con
 validación cruzada usando solo los datos de entrenamiento, y luego se evalúa con métricas
 estándar de Scikit-learn sobre un conjunto de prueba separado. El "mejor modelo" se
-determina automáticamente por F1-score (clasificación) o R² (regresión), y es el que se usa
-para las predicciones mostradas en el informe.
+determina automáticamente por su puntuación en la validación cruzada sobre los datos de
+entrenamiento (F1 macro en clasificación, R² en regresión), no por su resultado en la prueba:
+así el modelo no se elige mirando el examen, y la prueba queda como una medida honesta de lo
+que se puede esperar con datos nuevos. Ese modelo es el que se usa para las predicciones
+mostradas en el informe.
 
 La Regresión logística se incorporó después de medir, con validación cruzada anidada (la
 configuración se elige solo con datos de entrenamiento y se juzga con datos que el modelo no
@@ -117,39 +134,70 @@ vio), que aprendía mejor de los mismos datos que los otros tres modelos de clas
 hiperparámetros más amplias para los modelos existentes y no redujeron los errores en total,
 así que se dejaron como estaban.
 
-## 10. Resultados
+## 10. Procesamiento de varios datasets a la vez
+
+En un equipo de trabajo es habitual tener varios conjuntos de datos y querer analizarlos todos
+con el mismo procedimiento. Desde la página «Procesar varios» se eligen los datasets (incluidos
+o subidos en CSV/Excel), los pasos y cuántos se procesan al mismo tiempo:
+
+- **Concurrencia controlada**: cada dataset se procesa en un hilo propio, pero solo 3 (o 6, si
+  el usuario lo elige) corren a la vez; los demás esperan en una cola por orden de llegada.
+  Entrenar modelos usa intensamente el procesador, y limitar cuántos corren juntos evita que el
+  equipo se vuelva lento. Lo mismo vale para entrenar desde el panel de cada dataset: varios
+  entrenamientos pueden estar en curso a la vez.
+- **Dependencias entre pasos**: dentro de cada dataset los pasos se ejecutan en orden y, si se
+  pide un paso que necesita otro (entrenar requiere preprocesar; evaluar requiere entrenar), el
+  sistema lo agrega solo. Los pasos que ya estaban hechos no se repiten.
+- **Aislamiento de errores**: si un paso falla en un dataset, ese dataset se detiene con el
+  mensaje de error y los demás siguen.
+- **Seguimiento**: una campana en la barra superior muestra el avance de cada dataset (en qué
+  paso va y su porcentaje) y, al terminar, avisa con un enlace «Ver resultado». Los cálculos
+  siguen en el servidor aunque el usuario cambie de página.
+
+Los resultados de cada dataset son exactamente los mismos que si se hubieran calculado uno por
+uno: cada uno usa sus propios datos, su propia partición 80/20 y su propio análisis guardado.
+
+## 11. Resultados
 
 Los resultados varían según el dataset seleccionado (se calculan en tiempo real, no están
-fijos). A modo de referencia, esta es la última ejecución completa sobre los 9 datasets, con
-la misma partición 80/20 (semilla 42) y el mejor modelo que elige el sistema en cada uno:
+fijos). A modo de referencia, esta es la última ejecución completa sobre los 9 datasets con la
+versión 1.2 (columnas en español), con la misma partición 80/20 (semilla 42) y el mejor modelo
+que elige el sistema en cada uno. Se comprobó que la versión anterior, con las columnas en
+inglés, da exactamente los mismos resultados: cambiar los nombres no cambia lo que aprenden
+los modelos.
 
 | Dataset | Tipo | Mejor modelo | Resultado en el conjunto de prueba |
 |---|---|---|---|
-| Iris | Clasificación | Decision Tree | accuracy 93.3 %, recall 93.3 % (2 errores de 30 filas) |
-| Diabetes | Clasificación | Logistic Regression | accuracy 71.4 %, recall 69.6 % (44 errores de 154 filas) |
-| Viviendas | Regresión | Linear Regression | R² 0.977, MAE 13 195.14 |
+| Iris | Clasificación | Logistic Regression | accuracy 93.3 %, recall 93.3 % (2 errores de 30 filas) |
+| Diabetes | Clasificación | Decision Tree | accuracy 67.5 %, recall 32.6 % (50 errores de 154 filas) |
+| Viviendas | Regresión | Linear Regression | R² 0.976, MAE 13 195.14 |
 | Vehículos | Regresión | Linear Regression | R² 0.949, MAE 1 649.24 |
 | Clientes | Clasificación | Logistic Regression | accuracy 99.3 %, recall 99.3 % (1 error de 140 filas) |
 | Sintético | Clasificación | Logistic Regression | accuracy 92.0 %, recall 92.0 % (16 errores de 200 filas) |
-| Empleados | Clasificación | Random Forest | accuracy 72.3 %, recall 73.9 % (36 errores de 130 filas) |
+| Empleados | Clasificación | Logistic Regression | accuracy 71.5 %, recall 69.2 % (37 errores de 130 filas) |
 | Estudiantes | Regresión | Linear Regression | R² 0.726, MAE 5.22 |
 | Préstamos | Clasificación | Logistic Regression | accuracy 73.3 %, recall 76.5 % (32 errores de 120 filas) |
 
-Los errores de clasificación sobre las filas de prueba de los seis datasets de clasificación
-bajaron de **145 a 131** al incorporar la Regresión logística (por ejemplo, Clientes pasó de 9
-errores de 140 a 1). En Diabetes hay un compromiso: comete 3 errores más en total (44 frente
-a 41), pero detecta el 69,6 % de los casos positivos en vez del 37 %, lo que en un problema de
-salud suele importar más que el número total de errores. En regresión, Linear Regression sigue
-siendo el mejor modelo en Viviendas, Vehículos y Estudiantes — coherente con que esos
-datasets sintéticos fueron generados con una relación mayoritariamente lineal entre sus
-variables y el objetivo. Con conjuntos de prueba de 30 a 200 filas, diferencias de uno o dos
-puntos equivalen a pocas filas y pueden deberse al azar de la partición.
+En total, los seis datasets de clasificación cometen **138 errores** sobre sus filas de prueba.
+La Regresión logística es el mejor modelo en cinco de ellos (por ejemplo, Clientes falla solo
+1 de 140 filas). El caso a mejorar es **Diabetes**: la validación cruzada elige el árbol de
+decisión, que acierta el 67,5 % pero detecta solo el 32,6 % de los casos positivos (recall). En
+un problema de salud, dejar sin detectar a dos de cada tres personas con diabetes es más grave
+que el número total de errores; la Regresión logística con pesos balanceados detectaba cerca
+del 70 % en una medición anterior, así que conviene que el criterio de elección dé más peso al
+recall en este tipo de problemas. En regresión, Linear Regression es el mejor modelo en
+Viviendas, Vehículos y Estudiantes — coherente con que esos datasets sintéticos fueron
+generados con una relación mayoritariamente lineal entre sus variables y el objetivo. Con
+conjuntos de prueba de 30 a 200 filas, diferencias de uno o dos puntos equivalen a pocas filas
+y pueden deberse al azar de la partición.
 
-## 11. Conclusiones
+## 12. Conclusiones
 
 El caso práctico de DataExpert se resuelve de forma completa y verificable: cada cálculo
 —desde una simple media hasta el entrenamiento de un modelo— se ejecuta en tiempo real
 sobre datos reales o generados con relaciones reales, sin resultados escritos a mano. La
 comparación sistemática entre implementaciones manuales y las de NumPy/Scikit-learn refuerza
 la comprensión de los fundamentos matemáticos detrás de las herramientas que la empresa usa
-a diario, cerrando la brecha de base sólida que motivó este desarrollo.
+a diario, cerrando la brecha de base sólida que motivó este desarrollo. Al poder aplicar el
+mismo procedimiento a varios datasets a la vez, con el avance a la vista, la plataforma
+también sirve para el trabajo diario de un equipo y no solo para estudiar un caso aislado.
