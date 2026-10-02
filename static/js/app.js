@@ -311,7 +311,7 @@ function renderEntrenar(d) {
 
     const encabezados = (d.problema === "clasificacion"
         ? ["Modelo", "Accuracy", "Precision", "Recall", "F1-score"]
-        : ["Modelo", "MAE", "RMSE", "R²"]).concat([d.problema === "clasificacion" ? "Validación cruzada (F1)" : "Validación cruzada (R²)", "Mejor configuración encontrada"]);
+        : ["Modelo", "MAE", "RMSE", "R²"]).concat([`Validación cruzada (${d.metrica_cv || (d.problema === "clasificacion" ? "F1" : "R²")})`, "Mejor configuración encontrada"]);
 
     const modelos = d.modelos_disponibles || Object.keys(d.comparacion);
     const menuModelos = `

@@ -9,6 +9,12 @@ con la parte de entrenamiento (y dentro de cada partición de la validación cru
 parte de prueba nunca influye en lo que el modelo aprende. El mejor modelo se elige por su
 puntuación de validación cruzada, no por el resultado en la prueba, que queda como una
 medida honesta de cómo le iría con datos nuevos.
+
+La puntuación depende del problema: en los de sí/no (dos clases, como Diabetes) es la
+exactitud balanceada, el promedio de cuánto detecta de cada clase. Así no gana un modelo que
+acierta mucho en la clase más común pero se pierde la mayoría de los casos de la otra (en
+Diabetes, las personas que sí tienen la enfermedad). Con más de dos clases es F1 macro y en
+regresión, R².
 """
 
 import numpy as np
@@ -31,6 +37,7 @@ from sklearn.metrics import (
 )
 
 RANDOM_STATE = 42
+NOMBRES_METRICA_CV = {"balanced_accuracy": "exactitud balanceada", "f1_macro": "F1 macro", "r2": "R²"}
 
 # Grilla pequeña de hiperparámetros por modelo: se prueban todas las combinaciones con
 # validación cruzada SOLO sobre el conjunto de entrenamiento, y se queda con la que mejor
@@ -181,7 +188,10 @@ def entrenar(datos: dict, objetivo: str, on_progreso=None) -> dict:
 
     particiones = _particiones(problema, y_train)
     cv = StratifiedKFold(n_splits=particiones) if problema == "clasificacion" else KFold(n_splits=particiones)
-    metrica_cv = "f1_macro" if problema == "clasificacion" else "r2"
+    if problema == "regresion":
+        metrica_cv = "r2"
+    else:
+        metrica_cv = "balanced_accuracy" if y.nunique() == 2 else "f1_macro"
     filas_por_particion = len(X_train) - int(np.ceil(len(X_train) / particiones))
 
     candidatos = modelos_para(problema)
@@ -237,6 +247,7 @@ def entrenar(datos: dict, objetivo: str, on_progreso=None) -> dict:
         "parametros": parametros_por_modelo,
         "particiones": particiones,
         "mejor_modelo_nombre": mejor_nombre,
+        "metrica_cv": NOMBRES_METRICA_CV[metrica_cv],
         "mejor_modelo": mejor,
         "y_pred": y_pred_por_modelo[mejor_nombre],
         "y_pred_por_modelo": y_pred_por_modelo,

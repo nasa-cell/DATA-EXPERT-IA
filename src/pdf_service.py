@@ -623,7 +623,7 @@ def _resumen_comparacion(comparacion, entrenamiento):
     if not comparacion or not entrenamiento:
         return ""
     problema = entrenamiento["problema"]
-    nombre_metrica = "F1 macro" if problema == "clasificacion" else "R²"
+    nombre_metrica = entrenamiento.get("metrica_cv") or ("F1 macro" if problema == "clasificacion" else "R²")
     valores = {nombre: m.get("cv") for nombre, m in comparacion.items() if m.get("cv") is not None}
     mejor_nombre = entrenamiento["mejor_modelo_nombre"]
     if len(valores) < 2 or mejor_nombre not in valores:

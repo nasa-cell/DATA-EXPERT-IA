@@ -460,7 +460,7 @@ _CLAVES_ANALISIS = [
     "df_procesado", "info_columnas_originales", "mapeo_objetivo", "columnas_features",
     "X_train", "X_test", "y_train", "y_test", "modelo", "nombre_modelo", "modelos_entrenados",
     "predicciones_por_modelo", "y_pred", "metricas", "comparacion_modelos", "parametros_modelos",
-    "particiones", "algebra", "estadistica", "outliers", "graficos", "matriz_confusion_url",
+    "particiones", "metrica_cv", "algebra", "estadistica", "outliers", "graficos", "matriz_confusion_url",
     "real_vs_prediccion_url", "predicciones", "comparacion_chart_url", "comparacion_chart_explicacion",
     "importancia_url", "importancia_explicacion", "importancia_disponible",
 ]
@@ -469,7 +469,7 @@ _CLAVES_ANALISIS = [
 _CLAVES_ENTRENAMIENTO = [
     "columnas_features", "X_train", "X_test", "y_train", "y_test", "modelo", "nombre_modelo",
     "modelos_entrenados", "predicciones_por_modelo", "y_pred", "metricas", "comparacion_modelos",
-    "parametros_modelos", "particiones", "comparacion_chart_url", "comparacion_chart_explicacion",
+    "parametros_modelos", "particiones", "metrica_cv", "comparacion_chart_url", "comparacion_chart_explicacion",
     "importancia_url", "importancia_explicacion", "importancia_disponible",
 ]
 _CLAVES_EVALUACION = ["matriz_confusion_url", "real_vs_prediccion_url", "predicciones"]

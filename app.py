@@ -624,6 +624,7 @@ def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict
         "importancia_disponible": importancia["disponible"],
         "info_columnas_originales": info_columnas,
         "objetivo": str(meta["objetivo"]),
+        "metrica_cv": resultado["metrica_cv"],
     }
 
     with ds.BLOQUEO:
@@ -640,6 +641,7 @@ def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict
             "columnas_features": resultado["columnas_features"],
             "parametros_modelos": resultado["parametros"],
             "particiones": resultado["particiones"],
+            "metrica_cv": resultado["metrica_cv"],
             "mapeo_objetivo": datos["mapeo_objetivo"],
             "metricas": metricas_mejor,
             "comparacion_chart_url": comparacion_chart["url"],
@@ -1143,6 +1145,7 @@ def _calc_pdf(nombre, meta, estado):
             "problema": estado["problema"],
             "mejor_modelo_nombre": estado["nombre_modelo"],
             "particiones": estado.get("particiones"),
+            "metrica_cv": estado.get("metrica_cv"),
         }
 
     ruta_pdf = _ruta_pdf(nombre)

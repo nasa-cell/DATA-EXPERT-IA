@@ -122,10 +122,16 @@ Random Forest** para regresión. A cada uno se le buscan los mejores hiperparám
 validación cruzada usando solo los datos de entrenamiento, y luego se evalúa con métricas
 estándar de Scikit-learn sobre un conjunto de prueba separado. El "mejor modelo" se
 determina automáticamente por su puntuación en la validación cruzada sobre los datos de
-entrenamiento (F1 macro en clasificación, R² en regresión), no por su resultado en la prueba:
+entrenamiento, no por su resultado en la prueba:
 así el modelo no se elige mirando el examen, y la prueba queda como una medida honesta de lo
 que se puede esperar con datos nuevos. Ese modelo es el que se usa para las predicciones
-mostradas en el informe.
+mostradas en el informe. La puntuación depende del problema: en los de sí/no (Diabetes,
+Empleados, Préstamos) es la **exactitud balanceada**, el promedio de cuánto detecta de cada
+clase; con más de dos clases es F1 macro, y en regresión, R². La exactitud balanceada evita
+elegir un modelo que acierta mucho en la clase más común pero se pierde la mayoría de los casos
+de la otra: en Diabetes, con F1 macro se elegía un árbol de decisión que detectaba solo el
+32,6 % de las personas con diabetes; con la exactitud balanceada se elige la Regresión
+logística, que detecta el 69,6 % y además comete menos errores (44 en vez de 50).
 
 La Regresión logística se incorporó después de medir, con validación cruzada anidada (la
 configuración se elige solo con datos de entrenamiento y se juzga con datos que el modelo no
@@ -169,7 +175,7 @@ los modelos.
 | Dataset | Tipo | Mejor modelo | Resultado en el conjunto de prueba |
 |---|---|---|---|
 | Iris | Clasificación | Logistic Regression | accuracy 93.3 %, recall 93.3 % (2 errores de 30 filas) |
-| Diabetes | Clasificación | Decision Tree | accuracy 67.5 %, recall 32.6 % (50 errores de 154 filas) |
+| Diabetes | Clasificación | Logistic Regression | accuracy 71.4 %, recall 69.6 % (44 errores de 154 filas) |
 | Viviendas | Regresión | Linear Regression | R² 0.976, MAE 13 195.14 |
 | Vehículos | Regresión | Linear Regression | R² 0.949, MAE 1 649.24 |
 | Clientes | Clasificación | Logistic Regression | accuracy 99.3 %, recall 99.3 % (1 error de 140 filas) |
@@ -178,14 +184,11 @@ los modelos.
 | Estudiantes | Regresión | Linear Regression | R² 0.726, MAE 5.22 |
 | Préstamos | Clasificación | Logistic Regression | accuracy 73.3 %, recall 76.5 % (32 errores de 120 filas) |
 
-En total, los seis datasets de clasificación cometen **138 errores** sobre sus filas de prueba.
-La Regresión logística es el mejor modelo en cinco de ellos (por ejemplo, Clientes falla solo
-1 de 140 filas). El caso a mejorar es **Diabetes**: la validación cruzada elige el árbol de
-decisión, que acierta el 67,5 % pero detecta solo el 32,6 % de los casos positivos (recall). En
-un problema de salud, dejar sin detectar a dos de cada tres personas con diabetes es más grave
-que el número total de errores; la Regresión logística con pesos balanceados detectaba cerca
-del 70 % en una medición anterior, así que conviene que el criterio de elección dé más peso al
-recall en este tipo de problemas. En regresión, Linear Regression es el mejor modelo en
+En total, los seis datasets de clasificación cometen **132 errores** sobre sus filas de prueba,
+y la Regresión logística es el mejor modelo en todos ellos (por ejemplo, Clientes falla solo 1
+de 140 filas). Elegir el modelo por exactitud balanceada en los problemas de sí/no bajó el total
+de 138 a 132 errores: el cambio está en Diabetes, que ahora detecta a 7 de cada 10 personas con
+diabetes en vez de 3 de cada 10, y ningún otro dataset empeoró. En regresión, Linear Regression es el mejor modelo en
 Viviendas, Vehículos y Estudiantes — coherente con que esos datasets sintéticos fueron
 generados con una relación mayoritariamente lineal entre sus variables y el objetivo. Con
 conjuntos de prueba de 30 a 200 filas, diferencias de uno o dos puntos equivalen a pocas filas

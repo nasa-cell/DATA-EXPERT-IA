@@ -1,6 +1,6 @@
 ; Instalador de DataExpert IA (Inno Setup 6). Se compila con construir_instalador.bat despues de PyInstaller.
 #define Nombre "DataExpert IA"
-#define Version "1.2"
+#define Version "1.2.1"
 
 [Setup]
 AppId={{B4E2C7A9-3D51-4E8F-9A16-5F0D2C8E7B34}
