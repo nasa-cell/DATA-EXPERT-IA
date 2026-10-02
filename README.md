@@ -1,5 +1,10 @@
 # DataExpert IA
 
+## ⬇️ Descargar la app
+Apretá el enlace y se descarga:
+
+- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.2/Instalar_DataExpert_IA.exe) — instalador versión 1.2.2, 81 MB
+
 **Plataforma web de análisis matemático, estadístico y Machine Learning**
 *Fundamentos y Algoritmia para Inteligencia Artificial*
 
