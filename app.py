@@ -37,6 +37,7 @@ from src import statistics_service as stats
 from src import linear_algebra_service as algebra_srv
 from src import visualization_service as viz
 from src import machine_learning_service as ml
+from src import pautas_service as pautas_srv
 from src import pdf_service as pdf_srv
 from src.turnos import TurnoJusto
 
@@ -116,6 +117,10 @@ def _guardar_en_historial(entrada: dict):
 
 def _ruta_pdf(nombre: str) -> str:
     return os.path.join(INFORMES_DIR, f"Informe_{nombre}.pdf")
+
+
+def _ruta_pdf_pautas(nombre: str) -> str:
+    return os.path.join(INFORMES_DIR, f"Pautas_{nombre}.pdf")
 
 
 # ============================================================
@@ -406,6 +411,8 @@ def api_reiniciar():
         ds.reiniciar_analisis(nombre)
         if os.path.isfile(_ruta_pdf(nombre)):
             os.remove(_ruta_pdf(nombre))
+        if os.path.isfile(_ruta_pdf_pautas(nombre)):
+            os.remove(_ruta_pdf_pautas(nombre))
         return jsonify({"ok": True})
     except Exception as exc:
         return _error(str(exc))
@@ -455,12 +462,6 @@ def _ejecutar_paso(accion: str, calcular):
         return _error(str(exc))
 
 
-def _fuente_datos(estado) -> str:
-    """Indica si el análisis corre sobre el dataset original o el ya preprocesado
-    (normalizado/codificado), para que la interfaz lo aclare y no confunda al usuario."""
-    return "preprocesado" if estado.get("df_procesado") is not None else "original"
-
-
 # ============================================================
 # API — EXPLORACIÓN Y PREPROCESAMIENTO
 # ============================================================
@@ -499,20 +500,21 @@ def api_preprocesar():
 # ============================================================
 
 def _calc_algebra(nombre, meta, estado):
-    resultado = algebra_srv.ejecutar_algebra_lineal()
+    resultado = algebra_srv.ejecutar_algebra_lineal(ds.df_original(estado), meta["objetivo"])
     return resultado, {"algebra": resultado}
 
 
 def _calc_estadistica(nombre, meta, estado):
-    resultado = stats.calcular_estadisticas(ds.df_de(estado))
-    resultado["fuente_datos"] = _fuente_datos(estado)
+    # Sobre los valores reales (sin normalizar): la media de cada variable en su propia unidad.
+    resultado = stats.calcular_estadisticas(ds.df_original(estado))
+    resultado["fuente_datos"] = "original"
     return resultado, {"estadistica": resultado}
 
 
 def _calc_outliers(nombre, meta, estado):
-    df = ds.df_de(estado)
+    df = ds.df_original(estado)
     resultado = stats.detectar_outliers(df)
-    resultado["fuente_datos"] = _fuente_datos(estado)
+    resultado["fuente_datos"] = "original"
     with viz.BLOQUEO:
         boxplots = viz.generar_boxplots(df, dataset=nombre, objetivo=meta["objetivo"])
     resultado["boxplots_url"] = boxplots["url"]
@@ -541,10 +543,8 @@ def api_outliers():
 
 def _calc_graficos(nombre, meta, estado):
     with viz.BLOQUEO:
-        resultado = viz.generar_graficos(
-            ds.df_de(estado), dataset=nombre, objetivo=meta["objetivo"], mapeo_objetivo=estado.get("mapeo_objetivo")
-        )
-    resultado["fuente_datos"] = _fuente_datos(estado)
+        resultado = viz.generar_graficos(ds.df_original(estado), dataset=nombre, objetivo=meta["objetivo"])
+    resultado["fuente_datos"] = "original"
     return resultado, {"graficos": resultado}
 
 
@@ -1148,6 +1148,8 @@ def _calc_pdf(nombre, meta, estado):
         "importancia_disponible": estado.get("importancia_disponible"),
         "filas_prueba": int(estado["X_test"].shape[0]) if estado.get("X_test") is not None else None,
     }
+    if pautas_srv.aplica(meta, original):
+        resultado["pautas"] = pautas_srv.armar_pautas(original, meta, estado)
     if estado.get("df_procesado") is not None:
         resultado["preprocesamiento"] = {
             "antes": _resumen_basico(original),
@@ -1205,6 +1207,79 @@ def ver_pdf(nombre):
 @app.route("/descargar-pdf/<nombre>")
 def descargar_pdf(nombre):
     return _enviar_pdf(nombre, descargar=True)
+
+
+# ============================================================
+# PAUTAS DE LA ACTIVIDAD (dataset de semillas)
+# ============================================================
+
+def _pautas_actuales():
+    """(nombre, meta, pautas) del dataset abierto; pautas es None si no le corresponde."""
+    with ds.BLOQUEO:
+        nombre = ds.dataset_actual()
+        estado = ds.estado_de(nombre)
+        meta = ds.obtener_metadata(nombre)
+    original = ds.cargar_dataset(nombre)
+    if not pautas_srv.aplica(meta, original):
+        return nombre, meta, None
+    return nombre, meta, pautas_srv.armar_pautas(original, meta, estado)
+
+
+@app.route("/api/pautas")
+def api_pautas():
+    try:
+        _, _, pautas = _pautas_actuales()
+        return jsonify({"ok": True, "aplica": pautas is not None, **(pautas or {})})
+    except Exception as exc:
+        return _error(str(exc))
+
+
+@app.route("/generar-pdf-pautas")
+def generar_pdf_pautas():
+    """PDF corto, sólo con las 7 pautas: para entregar la actividad."""
+    try:
+        nombre, meta, pautas = _pautas_actuales()
+        if pautas is None:
+            return _error("Este dataset no corresponde a la actividad de las pautas.")
+        ruta = _ruta_pdf_pautas(nombre)
+        # Se anota como un paso más: la campana muestra «PDF de las pautas…» y avisa al terminar.
+        numero = _registrar_inicio(nombre, "pdf_pautas")
+        try:
+            with _LOCK_PDF:
+                pdf_srv.generar_pdf({"dataset_meta": meta, "pautas": pautas}, ruta, solo_pautas=True)
+        except Exception as exc:
+            _registrar_fin(numero, str(exc))
+            raise
+        _registrar_fin(numero)
+        marca = int(os.path.getmtime(ruta))
+        return jsonify({"ok": True, "cumplidas": pautas["cumplidas"],
+                        "ver_url": f"/ver-pdf-pautas/{nombre}?v={marca}",
+                        "descargar_url": f"/descargar-pdf-pautas/{nombre}?v={marca}"})
+    except Exception as exc:
+        return _error(str(exc))
+
+
+def _enviar_pdf_pautas(nombre: str, descargar: bool):
+    if nombre not in ds.DATASETS:
+        return _error("Ese dataset no existe.", 404)
+    ruta = _ruta_pdf_pautas(nombre)
+    if not os.path.isfile(ruta):
+        return _error("Todavía no se generó el PDF de las pautas.", 404)
+    nombre_descarga = f"Pautas_{secure_filename(ds.DATASETS[nombre]['nombre']) or nombre}.pdf"
+    respuesta = send_file(ruta, mimetype="application/pdf", as_attachment=descargar,
+                          download_name=nombre_descarga, max_age=0)
+    respuesta.headers["Cache-Control"] = "no-store"
+    return respuesta
+
+
+@app.route("/ver-pdf-pautas/<nombre>")
+def ver_pdf_pautas(nombre):
+    return _enviar_pdf_pautas(nombre, descargar=False)
+
+
+@app.route("/descargar-pdf-pautas/<nombre>")
+def descargar_pdf_pautas(nombre):
+    return _enviar_pdf_pautas(nombre, descargar=True)
 
 
 if __name__ == "__main__":

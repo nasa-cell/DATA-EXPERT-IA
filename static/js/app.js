@@ -216,13 +216,39 @@ function renderAlgebra(d) {
                 `x = ${num(d.sistema_ecuaciones.solucion.x)}, y = ${num(d.sistema_ecuaciones.solucion.y)}`,
                 fmtVec(d.sistema_ecuaciones.verificacion),
             ]])}
+            ${algebraConDataset(d.con_dataset, fmtVec, fmtMat)}
         </div>`;
+}
+
+// Las mismas operaciones con registros reales del dataset (cada fila es un vector).
+function algebraConDataset(c, fmtVec, fmtMat) {
+    if (!c) return "";
+    const nombres = c.columnas.join(", ");
+    const pesos = c.solucion.map((w, i) => `w${i + 1} = ${num(w)}`).join(", ");
+    return `
+            <h4>Con los datos del dataset</h4>
+            <p>Cada registro es un vector con sus medidas (${nombres}).</p>
+            ${tabla(["Operación", "Resultado"], [
+                [`Registro ${c.filas[0]} (v1)`, fmtVec(c.v1)],
+                [`Registro ${c.filas[1]} (v2)`, fmtVec(c.v2)],
+                ["Producto punto (v1 · v2)", num(c.producto_punto)],
+                ["Norma de v1", num(c.norma_v1)],
+                ["Norma de v2", num(c.norma_v2)],
+                ["Distancia entre v1 y v2 (la que usa K-Vecinos)", num(c.distancia)],
+                ["Matriz A (registros " + c.filas_matriz.join(", ") + ")", fmtMat(c.matriz)],
+                ["Transpuesta de A", fmtMat(c.transpuesta)],
+                ["A × Aᵀ", fmtMat(c.producto_matriz)],
+            ])}
+            <p>Sistema A · w = b: qué pesos combinan ${nombres} para dar «${c.columna_b}» en esos 3 registros.</p>
+            ${tabla(["Vector b (" + c.columna_b + ")", "Solución (np.linalg.solve)", "Verificación (A·w)"], [[
+                fmtVec(c.vector_b), pesos, fmtVec(c.verificacion),
+            ]])}`;
 }
 
 function notaFuente(d) {
     return d.fuente_datos === "preprocesado"
         ? `<p class="badge badge-mejor">Calculado sobre los datos ya preprocesados (normalizados/codificados)</p>`
-        : `<p class="badge">Calculado sobre el dataset original (aún no preprocesado)</p>`;
+        : `<p class="badge">Calculado sobre los valores reales del dataset (sin normalizar)</p>`;
 }
 
 function renderEstadistica(d) {
@@ -608,7 +634,88 @@ function sincronizarPasos(respuestas) {
     actualizarAvance();
 }
 
+// ---------------------------------------------------------------------------
+// Pautas de la actividad (dataset de semillas): una fila por pauta con su resultado; se abre con
+// su tabla, sus gráficos y su conclusión. Se actualiza sola cada vez que termina un paso.
+// ---------------------------------------------------------------------------
+const PAUTAS_ABIERTAS = new Set();
+
+function htmlPauta(p) {
+    const abierta = PAUTAS_ABIERTAS.has(p.numero) ? " open" : "";
+    const resumen = p.hecha ? escapar(p.resultado) : `Falta: «${escapar(p.falta)}»`;
+    let cuerpo = "";
+    if (!p.hecha) {
+        cuerpo = `<p>Para cumplir esta pauta, hacé el paso <b>«${escapar(p.falta)}»</b> del flujo de análisis.</p>`;
+    } else {
+        if (p.caracteristicas) cuerpo += `<div class="pauta-chips">${p.caracteristicas.map((c) => `<span>${escapar(c)}</span>`).join("")}</div>`;
+        if (p.tabla) cuerpo += tabla(p.tabla.encabezados, p.tabla.filas);
+        if (p.graficos) cuerpo += `<div class="pauta-graficos">${p.graficos.map((u) => `<img src="${escapar(u)}" alt="" loading="lazy">`).join("")}</div>`;
+        if (p.barras) {
+            cuerpo += `<div class="pauta-barras">${p.barras.map(([nombre, valor]) => `
+                <div class="pauta-barra"><span>${escapar(nombre)}</span><span class="riel"><i style="width:${(valor * 100).toFixed(1)}%"></i></span><span>${(valor * 100).toFixed(2).replace(".", ",")} %</span></div>`).join("")}</div>`;
+        }
+        cuerpo += `<p class="pauta-conclusion"><b>Conclusión:</b> ${escapar(p.conclusion)}</p>`;
+    }
+    return `
+        <details class="pauta${p.hecha ? "" : " pendiente"}" data-numero="${p.numero}"${abierta}>
+            <summary>
+                <span class="pauta-numero">${p.numero}</span>
+                <span class="pauta-titulo">${escapar(p.titulo)}</span>
+                <span class="pauta-resultado">${resumen}</span>
+                <span class="pauta-marca" aria-label="${p.hecha ? "Cumplida" : "Pendiente"}">${p.hecha ? "✔" : "…"}</span>
+            </summary>
+            <div class="pauta-cuerpo">${cuerpo}</div>
+        </details>`;
+}
+
+async function cargarPautas() {
+    const seccion = document.getElementById("pautas-actividad");
+    if (!seccion) return;
+    try {
+        const respuesta = await fetch("/api/pautas");
+        const data = await respuesta.json();
+        if (!data.ok || !data.aplica) { seccion.hidden = true; return; }
+        seccion.hidden = false;
+        const sello = document.getElementById("pautas-sello");
+        sello.textContent = `${data.cumplidas} de ${data.total} cumplidas`;
+        sello.classList.toggle("incompleto", data.cumplidas < data.total);
+        document.getElementById("pautas-lista").innerHTML = data.pautas.map(htmlPauta).join("") +
+            (data.conclusion_general ? `<p class="pautas-conclusion-general"><b>Conclusión general:</b> ${escapar(data.conclusion_general)}</p>` : "");
+        document.querySelectorAll("#pautas-lista .pauta").forEach((d) => {
+            d.addEventListener("toggle", () => {
+                const n = Number(d.dataset.numero);
+                if (d.open) PAUTAS_ABIERTAS.add(n); else PAUTAS_ABIERTAS.delete(n);
+            });
+        });
+    } catch (e) {
+        /* sin conexión: se vuelve a intentar al terminar el próximo paso */
+    }
+}
+
+async function generarPdfPautas(boton) {
+    const enlaces = document.getElementById("pautas-enlaces");
+    const original = boton.innerHTML;
+    boton.disabled = true;
+    boton.textContent = "⏳ Generando PDF…";
+    enlaces.hidden = true;
+    try {
+        const respuesta = await fetch("/generar-pdf-pautas");
+        const data = await respuesta.json();
+        if (!data.ok) { mostrarToast(data.error || "No se pudo generar el PDF", "error"); return; }
+        enlaces.innerHTML = `<a class="boton" href="${data.ver_url}" target="_blank" rel="noopener">👁 Ver PDF de las pautas</a>
+            <a class="boton" href="${data.descargar_url}">⬇ Descargar</a>`;
+        enlaces.hidden = false;
+        mostrarToast(`✓ PDF de las pautas listo (${data.cumplidas} de 7 cumplidas)`, "exito");
+    } catch (e) {
+        mostrarToast("Error de conexión con el servidor", "error");
+    } finally {
+        boton.disabled = false;
+        boton.innerHTML = original;
+    }
+}
+
 async function recargarEstado() {
+    cargarPautas();
     try {
         const respuesta = await fetch("/api/estado");
         const data = await respuesta.json();
@@ -629,7 +736,7 @@ const EN_CURSO_AQUI = new Set();
 const NOMBRES_PASO = {
     explorar: "Explorar datos", preprocesar: "Preprocesar", algebra: "Álgebra lineal",
     estadistica: "Estadística", outliers: "Valores atípicos", graficos: "Gráficos",
-    entrenar: "Entrenamiento", evaluar: "Evaluación", pdf: "Informe PDF",
+    entrenar: "Entrenamiento", evaluar: "Evaluación", pdf: "Informe PDF", pdf_pautas: "PDF de las pautas",
 };
 const CLAVE_VISTO = `dataexpert:actividad-vista:${window.ARRANQUE || ""}`;
 let vistoEnMemoria = null;
@@ -977,6 +1084,9 @@ async function verModeloEnMenu(boton) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    const botonPdfPautas = document.getElementById("boton-pdf-pautas");
+    if (botonPdfPautas) botonPdfPautas.addEventListener("click", () => generarPdfPautas(botonPdfPautas));
+
     document.querySelectorAll(".boton-accion").forEach((boton) => {
         boton.addEventListener("click", () => {
             if (boton.classList.contains("cargando")) return;

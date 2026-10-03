@@ -47,6 +47,18 @@
     <div class="tarjeta-metrica" data-metrica="metrica" style="--retraso: 200ms"><span class="valor">—</span><span class="etiqueta">Métrica principal</span></div>
 </section>
 
+<!-- Pautas de la actividad (sólo en el dataset de semillas): cada fila dice su resultado y se abre
+     con su tabla, sus gráficos y su conclusión. Ver static/js/app.js (cargarPautas). -->
+<section class="pautas-actividad" id="pautas-actividad" aria-labelledby="pautas-titulo" hidden>
+    <div class="pautas-cabecera">
+        <h2 id="pautas-titulo">✅ Pautas de la actividad</h2>
+        <span class="pautas-sello" id="pautas-sello">0 de 7 cumplidas</span>
+        <button type="button" class="boton boton-pautas-pdf" id="boton-pdf-pautas"><span class="icono" data-icono="pdf"></span>PDF de las pautas</button>
+    </div>
+    <p class="pautas-enlaces" id="pautas-enlaces" hidden></p>
+    <div id="pautas-lista"></div>
+</section>
+
 <div class="espacio-trabajo">
     <nav class="flujo" aria-label="Flujo del análisis">
         <div class="flujo-cabecera">

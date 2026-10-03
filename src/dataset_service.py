@@ -41,6 +41,26 @@ DATASETS = {
         "problema": "clasificacion",
         "color_a": "#c084fc", "color_b": "#ec4899",  # violeta -> rosa (floral)
     },
+    "semillas": {
+        "archivo": "semillas.csv",
+        "nombre": "Semillas de trigo",
+        "icono": "🌾",
+        "imagen": "img/datasets/semillas.jpg",
+        "descripcion": "Clasificación de 3 variedades de trigo (Kama, Rosa, Canadiense) según 7 medidas del grano.",
+        "objetivo": "clase",
+        "problema": "clasificacion",
+        "color_a": "#fbbf24", "color_b": "#b45309",  # trigo: dorado -> marrón
+    },
+    "trigo_simulado": {
+        "archivo": "trigo_simulado.csv",
+        "nombre": "Trigo simulado",
+        "icono": "🌾",
+        "imagen": "img/datasets/trigo_simulado.jpg",
+        "descripcion": "300 granos simulados con la misma forma que el trigo real: 3 variedades (Kama, Rosa, Canadiense) y 7 medidas del grano.",
+        "objetivo": "clase",
+        "problema": "clasificacion",
+        "color_a": "#a3e635", "color_b": "#3f6212",  # trigo verde (todavía en la espiga)
+    },
     "diabetes": {
         "archivo": "diabetes.csv",
         "nombre": "Diabetes",
@@ -476,8 +496,9 @@ _CLAVES_EVALUACION = ["matriz_confusion_url", "real_vs_prediccion_url", "predicc
 _INVALIDA = {
     "explorar": ([], []),
     "algebra": (["pdf"], []),
-    "preprocesar": (["estadistica", "outliers", "graficos", "entrenar", "evaluar", "pdf"],
-                    ["estadistica", "outliers", "graficos"] + _CLAVES_ENTRENAMIENTO + _CLAVES_EVALUACION),
+    # La estadística, los atípicos y los gráficos usan los datos originales (ver df_original):
+    # volver a preprocesar no los cambia, así que no se descartan.
+    "preprocesar": (["entrenar", "evaluar", "pdf"], _CLAVES_ENTRENAMIENTO + _CLAVES_EVALUACION),
     "entrenar": (["evaluar", "pdf"], _CLAVES_EVALUACION),
     "pdf": ([], []),
 }
@@ -609,6 +630,13 @@ def dataset_actual() -> str:
     if not ESTADO["dataset"]:
         raise ValueError("No hay un dataset seleccionado. Selecciona uno primero.")
     return ESTADO["dataset"]
+
+
+def df_original(estado: dict) -> pd.DataFrame:
+    """El dataset tal como es, sin normalizar ni codificar: la estadística, los valores atípicos y
+    los gráficos se calculan siempre sobre los valores reales (p. ej. la media de «Area» en cm²,
+    no ~0 como quedaría después de StandardScaler)."""
+    return cargar_dataset(estado["dataset"])
 
 
 def df_de(estado: dict) -> pd.DataFrame:

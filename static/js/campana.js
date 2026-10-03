@@ -14,7 +14,7 @@
     const NOMBRES_PASO = {
         explorar: "Explorar", preprocesar: "Preprocesar", algebra: "Álgebra lineal", estadistica: "Estadística",
         outliers: "Valores atípicos", graficos: "Gráficos", entrenar: "Entrenar modelos", evaluar: "Evaluar",
-        pdf: "Informe PDF",
+        pdf: "Informe PDF", pdf_pautas: "PDF de las pautas",
     };
     const CLAVE_VISTO = `dataexpert:campana-vista:${window.ARRANQUE || ""}`;
 

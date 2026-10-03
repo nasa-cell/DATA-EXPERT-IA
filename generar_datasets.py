@@ -1,6 +1,11 @@
-"""Genera los 9 datasets que usa DataExpert IA y los guarda en data/.
+"""Genera los 11 datasets que usa DataExpert IA y los guarda en data/.
 
 - iris: dataset público real, incluido en scikit-learn (sin descarga externa).
+- semillas: dataset público real de semillas de trigo (UCI «seeds», Charytanowicz et al., 2010,
+  licencia CC BY 4.0), tomado de data/fuentes/seeds_dataset.txt. Columnas en español; en el
+  enunciado de la actividad se llaman Area, Perimeter, ..., Class.
+- trigo_simulado: 300 granos simulados con la misma forma que el trigo real (promedios y relaciones
+  entre medidas de cada variedad), con semilla fija; la compacidad sale de su fórmula.
 - diabetes, viviendas, vehiculos, clientes, sintetico, empleados, estudiantes, prestamos:
   generados con NumPy/Pandas usando una semilla fija (random_state=42) para que los
   resultados sean reproducibles, con relaciones estadísticas reales entre variables
@@ -78,6 +83,45 @@ def generar_iris():
     df.columns = ["sepal_length", "sepal_width", "petal_length", "petal_width", "species"]
     df["species"] = df["species"].map(dict(enumerate(bunch.target_names)))
     return df
+
+
+def generar_semillas():
+    """Semillas de trigo (UCI «seeds»): 210 granos de 3 variedades medidos con rayos X.
+    7 características geométricas del grano y la variedad en «clase» (en el archivo original y
+    en el enunciado de la actividad: Area, Perimeter, Compactness, ..., Class)."""
+    ruta = os.path.join(DATA_DIR, "fuentes", "seeds_dataset.txt")
+    df = pd.read_csv(ruta, sep=r"\s+", header=None)
+    df.columns = ["área", "perímetro", "compacidad", "largo_grano", "ancho_grano", "coef_asimetría",
+                  "largo_surco", "clase"]
+    df["clase"] = df["clase"].map({1: "Kama", 2: "Rosa", 3: "Canadiense"})
+    return df
+
+
+def generar_trigo_simulado():
+    """Trigo simulado: 100 granos por variedad con la misma forma que el trigo real.
+
+    Para cada variedad se toman la media y la covarianza (cómo varían juntas las medidas) de los
+    granos reales y se sortean granos nuevos con esa misma distribución (semilla fija). La
+    compacidad no se sortea: se calcula con su fórmula, 4·π·área / perímetro², como en el
+    original, para que cada grano sea coherente."""
+    real = generar_semillas()
+    medidas = ["área", "perímetro", "largo_grano", "ancho_grano", "coef_asimetría", "largo_surco"]
+    rng = np.random.default_rng(42)
+    partes = []
+    for variedad, grupo in real.groupby("clase", sort=False):
+        valores = grupo[medidas].to_numpy(dtype=float)
+        nuevos = rng.multivariate_normal(valores.mean(axis=0), np.cov(valores, rowvar=False), size=100)
+        # Nada por debajo de lo mínimo posible (una medida física no puede ser 0 o negativa).
+        nuevos = np.maximum(nuevos, valores.min(axis=0) * 0.9)
+        parte = pd.DataFrame(nuevos, columns=medidas)
+        parte["clase"] = variedad
+        partes.append(parte)
+    df = pd.concat(partes, ignore_index=True)
+    df["compacidad"] = 4 * np.pi * df["área"] / df["perímetro"] ** 2
+    df = df[["área", "perímetro", "compacidad", "largo_grano", "ancho_grano", "coef_asimetría", "largo_surco", "clase"]]
+    df = df.round({"área": 2, "perímetro": 2, "compacidad": 4, "largo_grano": 3, "ancho_grano": 3,
+                   "coef_asimetría": 3, "largo_surco": 3})
+    return df.sample(frac=1, random_state=42).reset_index(drop=True)
 
 
 def generar_diabetes():
@@ -427,6 +471,8 @@ def main():
     os.makedirs(DATA_DIR, exist_ok=True)
     generadores = {
         "iris.csv": generar_iris,
+        "semillas.csv": generar_semillas,
+        "trigo_simulado.csv": generar_trigo_simulado,
         "diabetes.csv": generar_diabetes,
         "viviendas.csv": generar_viviendas,
         "vehiculos.csv": generar_vehiculos,

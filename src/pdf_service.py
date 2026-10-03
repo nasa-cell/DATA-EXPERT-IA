@@ -171,8 +171,8 @@ def _portada(canvas_obj, doc, meta, fecha):
     c.roundRect(x0, y0, w, h, 0.7 * cm, stroke=1, fill=1)
 
     cursor = y0 + h - 1.5 * cm
-    # Etiqueta «Informe de análisis»
-    etiqueta = "Informe de análisis"
+    # Etiqueta «Informe de análisis» (o «Pautas de la actividad» en el PDF corto de las pautas)
+    etiqueta = meta.get("etiqueta_portada", "Informe de análisis")
     c.setFont(F_TEXTO_NEGRITA, 10)
     ancho_et = pdfmetrics.stringWidth(etiqueta, F_TEXTO_NEGRITA, 10) + 0.9 * cm
     c.setFillColor(TEMA["pagina"])
@@ -671,7 +671,87 @@ def _resumen_predicciones(predicciones, problema, metrica_principal=None, filas_
 # GENERACIÓN DEL PDF
 # ============================================================
 
-def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
+def _algebra_con_dataset(c, estilos):
+    """Las mismas operaciones de álgebra lineal con registros reales del dataset."""
+    if not c:
+        return []
+    nombres = ", ".join(c["columnas"])
+    pesos = ", ".join(f"w{i + 1} = {w:.4f}" for i, w in enumerate(c["solucion"]))
+    return [
+        Spacer(1, 0.3 * cm),
+        _h2("Con los datos del dataset", estilos),
+        Paragraph(
+            f"Ahora las mismas operaciones con datos reales: cada registro es un vector con sus medidas "
+            f"({nombres}).", estilos["body"],
+        ),
+        _tabla_datos(
+            ["Operación con registros reales", "Resultado"],
+            [
+                (f'Registro {c["filas"][0]} (v1)', _fmt_vector(c["v1"])),
+                (f'Registro {c["filas"][1]} (v2)', _fmt_vector(c["v2"])),
+                ("Producto punto  v1 · v2", f'{c["producto_punto"]:.3f}'),
+                ("Norma de v1", f'{c["norma_v1"]:.3f}'),
+                ("Norma de v2", f'{c["norma_v2"]:.3f}'),
+                ("Distancia entre v1 y v2", f'{c["distancia"]:.3f}'),
+                (f'Matriz A (registros {", ".join(map(str, c["filas_matriz"]))})', _fmt_matriz(c["matriz"])),
+                ("Transpuesta de A", _fmt_matriz(c["transpuesta"])),
+                ("A × transpuesta de A", _fmt_matriz(c["producto_matriz"])),
+            ], estilos, anchos=[8.5 * cm, 8.9 * cm],
+        ),
+        Spacer(1, 0.15 * cm),
+        Paragraph(
+            f'Los dos primeros registros apuntan casi en la misma dirección (coseno {c["coseno"]:.4f}) y están a '
+            f'una distancia de {c["distancia"]:.3f}: esa distancia es justamente la que usa K-Vecinos para '
+            f'decidir qué registros se parecen. Sistema de ecuaciones A · w = b: se buscan los pesos que '
+            f'combinan {nombres} para dar «{c["columna_b"]}» en 3 registros reales. Con <i>np.linalg.solve</i> '
+            f'se obtiene {pesos}; al multiplicar A por esa solución se vuelve a obtener b '
+            f'({_fmt_vector(c["verificacion"])} contra {_fmt_vector(c["vector_b"])}), así que la solución es correcta.',
+            estilos["body"],
+        ),
+    ]
+
+
+def _seccion_pautas(pautas, estilos, titulo="Pautas de la actividad"):
+    """Las 7 pautas de la actividad: resultado, tabla, gráficos y conclusión de cada una."""
+    if not pautas:
+        return []
+    bloques = list(_seccion(titulo, estilos))
+    bloques.append(Paragraph(
+        f'Se cumplen <b>{pautas["cumplidas"]} de {pautas["total"]}</b> pautas. Cada una muestra su resultado '
+        "calculado sobre los datos reales del dataset y una conclusión.", estilos["body"],
+    ))
+    for p in pautas["pautas"]:
+        estado = "cumplida" if p["hecha"] else "pendiente"
+        partes = [_h2(f'Pauta {p["numero"]}: {p["titulo"]} ({estado})', estilos)]
+        if not p["hecha"]:
+            partes.append(Paragraph(f'Falta hacer el paso «{p["falta"]}» en la aplicación.', estilos["body"]))
+            bloques.append(KeepTogether(partes))
+            continue
+        partes.append(Paragraph(f'<b>Resultado:</b> {p["resultado"]}', estilos["body"]))
+        if p.get("caracteristicas"):
+            partes.append(Paragraph("<b>Características:</b> " + ", ".join(p["caracteristicas"]), estilos["body"]))
+        # El título de la pauta nunca queda solo al pie de una página: va junto con su tabla.
+        if p.get("tabla"):
+            partes.append(_tabla_datos(p["tabla"]["encabezados"], p["tabla"]["filas"], estilos))
+            partes.append(Spacer(1, 0.2 * cm))
+        bloques.append(KeepTogether(partes))
+        imagenes = [_imagen_segura(u, ancho=8.3 * cm, alto_max=7 * cm) for u in p.get("graficos", [])]
+        imagenes = [i for i in imagenes if i]
+        if imagenes:
+            fila = Table([imagenes], colWidths=[ANCHO_CONTENIDO / len(imagenes)] * len(imagenes))
+            fila.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 2),
+                                      ("RIGHTPADDING", (0, 0), (-1, -1), 2)]))
+            bloques.append(fila)
+            bloques.append(Spacer(1, 0.2 * cm))
+        bloques.append(_callout(f'<b>Conclusión:</b> {p["conclusion"]}', estilos))
+        bloques.append(Spacer(1, 0.3 * cm))
+    if pautas.get("conclusion_general"):
+        bloques.append(_callout(f'<b>Conclusión general:</b> {pautas["conclusion_general"]}', estilos))
+    return bloques
+
+
+def generar_pdf(resultado: dict, ruta_pdf: str, solo_pautas: bool = False) -> str:
+    """Informe completo, o con `solo_pautas` uno corto con la portada y las pautas de la actividad."""
     os.makedirs(os.path.dirname(ruta_pdf), exist_ok=True)
 
     doc = SimpleDocTemplate(
@@ -727,9 +807,18 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
     story.append(Spacer(1, 1))
     story.append(PageBreak())
 
+    if solo_pautas:
+        meta = {**meta, "etiqueta_portada": "Pautas de la actividad"}
+        story.extend(_seccion_pautas(resultado.get("pautas"), estilos))
+        return _construir(doc, story, meta, fecha, ruta_pdf)
+
     # --- Resumen en tarjetas ---
     story.append(_tarjetas_resumen(resultado, estilos))
     story.append(Spacer(1, 0.7 * cm))
+
+    if resultado.get("pautas"):
+        story.extend(_seccion_pautas(resultado["pautas"], estilos))
+        story.append(PageBreak())
 
     # --- 1. Introducción ---
     story.extend(_seccion("1. Introducción", estilos))
@@ -841,8 +930,8 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
             "representan los datos de un registro o los pesos de un modelo, el producto punto mide su "
             "similitud direccional, la norma mide su magnitud, y resolver un sistema de ecuaciones lineales "
             "equivale a encontrar los coeficientes que ajustan un modelo lineal a un conjunto de restricciones. "
-            "Esta sección es independiente del dataset seleccionado: usa vectores y matrices fijos para "
-            "ilustrar cada operación de forma clara y verificable.",
+            "Primero se usan vectores y matrices fijos para ver cada operación de forma clara, y después las "
+            "mismas operaciones con registros reales del dataset.",
             estilos["body"],
         ))
         story.append(Spacer(1, 0.2 * cm))
@@ -895,6 +984,7 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
             "comprobar que coincide con el vector b original, confirmando que la solución es correcta.",
             estilos["body"],
         ))
+        story.extend(_algebra_con_dataset(algebra.get("con_dataset"), estilos))
     else:
         story.append(Paragraph("Sección no ejecutada.", estilos["body"]))
 
@@ -1180,6 +1270,10 @@ def generar_pdf(resultado: dict, ruta_pdf: str) -> str:
             "obtener conclusiones basadas en resultados reales.", estilos["body"],
         ))
 
+    return _construir(doc, story, meta, fecha, ruta_pdf)
+
+
+def _construir(doc, story, meta, fecha, ruta_pdf):
     def por_pagina(canvas_obj, documento):
         if documento.page == 1:
             _portada(canvas_obj, documento, meta, fecha)
