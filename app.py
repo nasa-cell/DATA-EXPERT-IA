@@ -395,6 +395,7 @@ def api_estado():
     """Lo ya calculado para el dataset abierto, para mostrarlo sin recalcular al volver a la página."""
     try:
         nombre = ds.dataset_actual()
+        _completar_pares(nombre, ds.estado_de(nombre))
         return jsonify({"ok": True, "dataset": nombre, "respuestas": ds.estado_de(nombre)["respuestas"],
                         "en_curso": _en_curso(nombre)})
     except Exception as exc:
@@ -602,6 +603,22 @@ def _preparar_entrenamiento(nombre: str):
     return meta, pre.preparar_para_modelo(df, meta["objetivo"]), info_columnas
 
 
+def _completar_pares(nombre: str, estado: dict):
+    """Los análisis guardados antes de que existieran los gráficos de a dos modelos no los traen:
+    se dibujan con las métricas ya calculadas, sin volver a entrenar."""
+    if not estado.get("comparacion_modelos") or estado.get("comparacion_pares") is not None:
+        return
+    comparacion = estado["comparacion_modelos"]
+    problema = estado.get("problema") or ("clasificacion" if "accuracy" in next(iter(comparacion.values())) else "regresion")
+    with viz.BLOQUEO:
+        pares = viz.generar_comparacion_pares_charts(comparacion, problema, dataset=nombre)
+    with ds.BLOQUEO:
+        estado["comparacion_pares"] = pares
+        if "entrenar" in estado["respuestas"]:
+            estado["respuestas"]["entrenar"]["comparacion_pares"] = pares
+        ds.guardar_estado(nombre)
+
+
 def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict:
     """Entrena y guarda el resultado en el análisis del dataset. Actualiza ENTRENAMIENTOS[nombre]
     con el avance. Devuelve lo que se muestra en el dashboard; si falla, lanza la excepción."""
@@ -615,6 +632,9 @@ def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict
 
     with viz.BLOQUEO:
         comparacion_chart = viz.generar_comparacion_modelos_chart(
+            resultado["comparacion"], resultado["problema"], dataset=nombre
+        )
+        comparacion_pares = viz.generar_comparacion_pares_charts(
             resultado["comparacion"], resultado["problema"], dataset=nombre
         )
         importancia = viz.generar_importancia_variables(
@@ -633,6 +653,7 @@ def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict
         "filas_prueba": int(resultado["X_test"].shape[0]),
         "comparacion_chart_url": comparacion_chart["url"],
         "comparacion_chart_explicacion": comparacion_chart["explicacion"],
+        "comparacion_pares": comparacion_pares,
         "importancia_url": importancia["url"],
         "importancia_explicacion": importancia["explicacion"],
         "importancia_disponible": importancia["disponible"],
@@ -660,6 +681,7 @@ def _entrenar(nombre: str, meta: dict, datos: dict, info_columnas: list) -> dict
             "metricas": metricas_mejor,
             "comparacion_chart_url": comparacion_chart["url"],
             "comparacion_chart_explicacion": comparacion_chart["explicacion"],
+            "comparacion_pares": comparacion_pares,
             "importancia_url": importancia["url"],
             "importancia_explicacion": importancia["explicacion"],
             "importancia_disponible": importancia["disponible"],
@@ -1123,6 +1145,7 @@ def generar_pdf():
 
 def _calc_pdf(nombre, meta, estado):
     original = ds.cargar_dataset(nombre)
+    _completar_pares(nombre, estado)
     resultado = {
         "dataset_meta": meta,
         # Siempre el dataset ORIGINAL (nunca el ya preprocesado): esta sección describe el
@@ -1143,6 +1166,7 @@ def _calc_pdf(nombre, meta, estado):
         "predicciones": estado.get("predicciones"),
         "comparacion_chart_url": estado.get("comparacion_chart_url"),
         "comparacion_chart_explicacion": estado.get("comparacion_chart_explicacion"),
+        "comparacion_pares": estado.get("comparacion_pares"),
         "importancia_url": estado.get("importancia_url"),
         "importancia_explicacion": estado.get("importancia_explicacion"),
         "importancia_disponible": estado.get("importancia_disponible"),

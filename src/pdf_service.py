@@ -467,6 +467,25 @@ def _imagen_segura(url_relativa, ancho=15 * cm, marco=True, alto_max=12 * cm):
     return _imagen_archivo(str(ruta), ancho, marco, alto_max)
 
 
+def _fila_de_pares(pares, estilos):
+    """Los gráficos de a dos modelos, lado a lado, cada uno con su descripción debajo."""
+    columna = ANCHO_CONTENIDO / 2
+    celdas = []
+    for par in pares[:2]:
+        imagen = _imagen_segura(par.get("url"), ancho=columna - 0.9 * cm)
+        if imagen:
+            celdas.append([imagen, Spacer(1, 0.2 * cm), Paragraph(par.get("explicacion") or "", estilos["body"])])
+    if not celdas:
+        return None
+    tabla = Table([celdas], colWidths=[columna] * len(celdas), hAlign="LEFT")
+    tabla.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    return tabla
+
+
 def _imagen_archivo(ruta, ancho=15 * cm, marco=True, alto_max=12 * cm):
     if not ruta or not os.path.isfile(ruta):
         return None
@@ -810,6 +829,7 @@ def generar_pdf(resultado: dict, ruta_pdf: str, solo_pautas: bool = False) -> st
     predicciones = resultado.get("predicciones") or []
     comparacion_chart_url = resultado.get("comparacion_chart_url")
     comparacion_chart_explicacion = resultado.get("comparacion_chart_explicacion")
+    comparacion_pares = resultado.get("comparacion_pares") or []
     importancia_url = resultado.get("importancia_url")
     importancia_explicacion = resultado.get("importancia_explicacion")
     importancia_disponible = resultado.get("importancia_disponible")
@@ -1233,6 +1253,14 @@ def generar_pdf(resultado: dict, ruta_pdf: str, solo_pautas: bool = False) -> st
         story.append(_tabla_datos(["Valor real", "Predicción", "Resultado"], filas, estilos))
     else:
         story.append(Paragraph("Sección no ejecutada.", estilos["body"]))
+
+    # Los modelos comparados de a dos van al final, justo antes de las conclusiones.
+    fila_pares = _fila_de_pares(comparacion_pares, estilos) if comparacion else None
+    if fila_pares:
+        story.append(Spacer(1, 0.3 * cm))
+        story.append(KeepTogether([
+            _h2("Comparación de a dos modelos", estilos), Spacer(1, 0.3 * cm), fila_pares,
+        ]))
 
     # --- 16. Conclusiones ---
     story.extend(_seccion("16. Conclusiones", estilos))

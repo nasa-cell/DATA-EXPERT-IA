@@ -333,6 +333,9 @@ p { margin: 0; }
 .grafico-tarjeta figcaption { padding: 10px 16px; font: 700 0.92rem var(--fuente-texto); background: var(--pagina); border-bottom: var(--borde); }
 .grafico-imagen { display: block; width: 100%; height: auto; background: #fff; cursor: zoom-in; }
 .grafico-solo { margin: 0; max-width: 800px; border: var(--borde); border-radius: var(--radio); background: #fff; box-shadow: var(--sombra-chica); overflow: hidden; }
+.graficos-pares { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 14px; }
+.grafico-par { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.grafico-par p { margin: 0; }
 .visor { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: rgba(20, 17, 43, 0.86); animation: aparecer 160ms ease-out; cursor: zoom-out; }
 .visor img { max-width: min(96vw, 1200px); max-height: 90vh; border: var(--borde); border-radius: 14px; background: #fff; }
 .visor button { position: absolute; top: 16px; right: 16px; width: 46px; height: 46px; border-radius: 13px; border: var(--borde); cursor: pointer; background: #fff; color: var(--tinta); display: grid; place-items: center; }

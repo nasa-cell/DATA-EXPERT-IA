@@ -424,6 +424,16 @@ function renderEntrenar(d) {
                     <figure class="grafico-solo"><img class="grafico-imagen" src="${d.comparacion_chart_url}?t=${Date.now()}" alt="Comparación de modelos" title="Clic para ampliar"></figure>
                     <p>${escapar(d.comparacion_chart_explicacion || "")}</p>
                 ` : ""}
+                ${(d.comparacion_pares || []).length ? `
+                    <h4>Comparación de a dos modelos</h4>
+                    <div class="graficos-pares">
+                        ${d.comparacion_pares.map((g) => `
+                            <div class="grafico-par">
+                                <figure class="grafico-solo"><img class="grafico-imagen" src="${g.url}?t=${Date.now()}" alt="${escapar(g.titulo)}" title="Clic para ampliar"></figure>
+                                <p>${escapar(g.explicacion)}</p>
+                            </div>`).join("")}
+                    </div>
+                ` : ""}
                 ${d.importancia_url ? `
                     <h4>Variables más influyentes (mejor modelo)</h4>
                     <figure class="grafico-solo"><img class="grafico-imagen" src="${d.importancia_url}?t=${Date.now()}" alt="Importancia de variables" title="Clic para ampliar"></figure>

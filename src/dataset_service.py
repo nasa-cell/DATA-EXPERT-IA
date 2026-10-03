@@ -482,7 +482,7 @@ _CLAVES_ANALISIS = [
     "predicciones_por_modelo", "y_pred", "metricas", "comparacion_modelos", "parametros_modelos",
     "particiones", "metrica_cv", "algebra", "estadistica", "outliers", "graficos", "matriz_confusion_url",
     "real_vs_prediccion_url", "predicciones", "comparacion_chart_url", "comparacion_chart_explicacion",
-    "importancia_url", "importancia_explicacion", "importancia_disponible",
+    "comparacion_pares", "importancia_url", "importancia_explicacion", "importancia_disponible",
 ]
 
 # Qué queda desactualizado cuando se vuelve a ejecutar un paso: (pasos a descartar, claves a vaciar).
@@ -490,7 +490,7 @@ _CLAVES_ENTRENAMIENTO = [
     "columnas_features", "X_train", "X_test", "y_train", "y_test", "modelo", "nombre_modelo",
     "modelos_entrenados", "predicciones_por_modelo", "y_pred", "metricas", "comparacion_modelos",
     "parametros_modelos", "particiones", "metrica_cv", "comparacion_chart_url", "comparacion_chart_explicacion",
-    "importancia_url", "importancia_explicacion", "importancia_disponible",
+    "comparacion_pares", "importancia_url", "importancia_explicacion", "importancia_disponible",
 ]
 _CLAVES_EVALUACION = ["matriz_confusion_url", "real_vs_prediccion_url", "predicciones"]
 _INVALIDA = {

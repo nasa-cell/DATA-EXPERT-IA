@@ -376,6 +376,89 @@ def generar_comparacion_modelos_chart(comparacion: dict, problema: str, dataset:
     return {"url": _url(dataset, nombre), "explicacion": explicacion}
 
 
+def _pares_de_modelos(comparacion: dict, clave: str) -> list:
+    """De a dos modelos por gráfico. Con los 4 de clasificación: KNN con Decision Tree y los otros
+    dos juntos. En regresión hay 3 (no existe KNN): Decision Tree con Random Forest, y el que queda
+    (Linear Regression) contra el mejor de esos dos."""
+    nombres = list(comparacion.keys())
+    if "KNN" in nombres and "Decision Tree" in nombres:
+        primero = ["KNN", "Decision Tree"]
+    elif "Decision Tree" in nombres and "Random Forest" in nombres:
+        primero = ["Decision Tree", "Random Forest"]
+    else:
+        primero = nombres[:2]
+    resto = [n for n in nombres if n not in primero]
+    if len(primero) < 2:
+        return []
+    if len(resto) == 1:
+        resto.append(max(primero, key=lambda n: comparacion[n][clave]))
+    return [primero] + ([resto[:2]] if len(resto) >= 2 else [])
+
+
+def generar_comparacion_pares_charts(comparacion: dict, problema: str, dataset: str) -> list:
+    """Gráficos de barras que comparan los modelos de a dos, con el valor escrito sobre cada barra.
+    Cada modelo conserva el color que tiene en el gráfico general."""
+    if problema == "clasificacion":
+        metricas_mostradas = ["accuracy", "precision", "recall", "f1"]
+        etiquetas_metricas = ["Accuracy", "Precision", "Recall", "F1-score"]
+        clave = "accuracy"
+    else:
+        metricas_mostradas, etiquetas_metricas, clave = ["r2"], ["R²"], "r2"
+
+    nombres_modelos = list(comparacion.keys())
+    color = {n: PALETA[i % len(PALETA)] for i, n in enumerate(nombres_modelos)}
+    graficos = []
+    for numero, par in enumerate(_pares_de_modelos(comparacion, clave), start=1):
+        fig, ax = plt.subplots(figsize=(5.6, 4.4))
+        x = np.arange(len(metricas_mostradas))
+        ancho = 0.8 / len(par)
+        for i, nombre_modelo in enumerate(par):
+            valores = [comparacion[nombre_modelo][m] for m in metricas_mostradas]
+            barras = ax.bar(x + i * ancho, valores, width=ancho, label=nombre_modelo, color=color[nombre_modelo])
+            for barra, valor in zip(barras, valores):
+                texto = f"{valor * 100:.1f}%" if problema == "clasificacion" else f"{valor:.3f}"
+                ax.text(barra.get_x() + barra.get_width() / 2, max(valor, 0) + 0.012, texto,
+                        ha="center", va="bottom", fontsize=8.5, fontweight="bold")
+        ax.set_xticks(x + ancho * (len(par) - 1) / 2)
+        ax.set_xticklabels(etiquetas_metricas)
+        # Techo con lugar para la leyenda; en regresión R² puede ser negativo, por eso el piso no es fijo.
+        piso = min(0, min(comparacion[n][clave] for n in par) - 0.05) if problema != "clasificacion" else 0
+        ax.set_ylim(piso, 1.18)
+        ax.set_yticks(np.arange(0, 1.01, 0.2))
+        ax.set_ylabel("Valor de la métrica")
+        ax.grid(axis="x", visible=False)
+        titulo = f"{par[0]} vs. {par[1]}"
+        ax.set_title(titulo)
+        ax.legend(loc="upper center", ncol=2, bbox_to_anchor=(0.5, 1.0), fontsize=9)
+        fig.tight_layout()
+        nombre = f"comparacion_par_{numero}.png"
+        fig.savefig(_ruta(dataset, nombre), dpi=130)
+        plt.close(fig)
+
+        ganador, otro = sorted(par, key=lambda n: comparacion[n][clave], reverse=True)
+        v_ganador, v_otro = comparacion[ganador][clave], comparacion[otro][clave]
+        if problema == "clasificacion":
+            a, b = round(v_ganador * 100, 1), round(v_otro * 100, 1)
+            if a == b:
+                explicacion = f"Empate: {ganador} y {otro} aciertan {_coma(a)} % de los casos de prueba."
+            else:
+                explicacion = (f"Gana {ganador}: acierta {_coma(a)} % contra {_coma(b)} % de {otro} "
+                               f"({_coma(round((v_ganador - v_otro) * 100, 1))} puntos más).")
+        else:
+            a, b = round(v_ganador, 3), round(v_otro, 3)
+            if a == b:
+                explicacion = f"Empate: {ganador} y {otro} tienen el mismo R² ({_coma(a, 3)})."
+            else:
+                explicacion = (f"Gana {ganador}: su R² es {_coma(a, 3)} contra {_coma(b, 3)} de {otro} "
+                               "(cuanto más cerca de 1, mejor predice).")
+        graficos.append({"titulo": titulo, "url": _url(dataset, nombre), "explicacion": explicacion})
+    return graficos
+
+
+def _coma(valor: float, decimales: int = 1) -> str:
+    return f"{valor:.{decimales}f}".replace(".", ",")
+
+
 def generar_importancia_variables(modelo, columnas_features: list, dataset: str, maximo: int = 15) -> dict:
     """Grafico de barras horizontales con la importancia de cada variable segun el modelo
     ganador: `feature_importances_` en modelos de arbol (Decision Tree, Random Forest) o los

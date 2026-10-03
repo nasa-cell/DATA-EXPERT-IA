@@ -3,7 +3,7 @@
 ## ⬇️ Descargar la app
 Apretá el enlace y se descarga:
 
-- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe) — instalador versión 1.2.4, 81 MB
+- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.5/Instalar_DataExpert_IA.exe) — instalador versión 1.2.5, 81 MB
 
 **Plataforma web de análisis matemático, estadístico y Machine Learning**
 *Fundamentos y Algoritmia para Inteligencia Artificial*
@@ -12,7 +12,7 @@ Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre 
 
 ## Aplicación de Windows
 
-**[Descargar el instalador para Windows (versión 1.2.4)](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
+**[Descargar el instalador para Windows (versión 1.2.5)](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.5/Instalar_DataExpert_IA.exe)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
 
 Para generar el instalador desde el código se usa `pc instalador/construir_instalador.bat` (detalles en `pc instalador/LEEME.txt`).
 
@@ -32,6 +32,7 @@ Para generar el instalador desde el código se usa `pc instalador/construir_inst
 - Detección de valores atípicos (media ± k·σ).
 - Gráficos con Matplotlib y Seaborn.
 - Modelos de Scikit-learn para clasificación o regresión (se detecta automáticamente), con métricas reales. Cada modelo es un Pipeline que rellena, codifica y escala aprendiendo solo de la parte de entrenamiento, y el mejor se elige por validación cruzada.
+- Además del gráfico general, los modelos se comparan de a dos (K-Vecinos contra Árbol de Decisión, y Random Forest contra Regresión Logística; en regresión, Árbol contra Random Forest y Regresión Lineal contra el mejor de ellos), con el valor sobre cada barra y una descripción de quién gana. Sale en todos los datasets y en el informe PDF, antes de las conclusiones.
 - Informe PDF con ReportLab.
 
 ## Tecnologías
