@@ -15,3 +15,6 @@ datos_usuario/
 # Datasets subidos y análisis guardados al usar la aplicación desde el código
 datasets_subidos/
 analisis_guardados/
+
+# Diagramas de las pautas: sólo en la PC
+pautas/diagrama_pautas.*
