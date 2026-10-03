@@ -21,6 +21,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     Paragraph as _Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle, PageBreak, KeepTogether,
+    CondPageBreak,
 )
 
 from src import configuracion as cfg
@@ -393,7 +394,9 @@ def _parrafo_ajustado(texto, estilo, ancho_disponible):
     return Paragraph(texto, estilo)
 
 
-def _tabla_datos(encabezados, filas, estilos, anchos=None):
+def _tabla_datos(encabezados, filas, estilos, anchos=None, junta=True):
+    """Tabla con encabezado oscuro. Con `junta=False` no se envuelve en KeepTogether: sirve cuando ya va
+    dentro de otro KeepTogether, porque anidarlos hace que ReportLab salte de página aunque haya lugar."""
     if anchos is None:
         # La primera columna (nombres) un poco más ancha; el resto en partes iguales, siempre dentro de la página.
         primera = min(5 * cm, max(3 * cm, ANCHO_CONTENIDO * 0.26)) if len(encabezados) > 2 else ANCHO_CONTENIDO / 2
@@ -414,7 +417,7 @@ def _tabla_datos(encabezados, filas, estilos, anchos=None):
         ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
-    return KeepTogether([tabla])
+    return KeepTogether([tabla]) if junta else tabla
 
 
 def _tarjetas_resumen(resultado, estilos):
@@ -720,34 +723,45 @@ def _seccion_pautas(pautas, estilos, titulo="Pautas de la actividad"):
         f'Se cumplen <b>{pautas["cumplidas"]} de {pautas["total"]}</b> pautas. Cada una muestra su resultado '
         "calculado sobre los datos reales del dataset y una conclusión.", estilos["body"],
     ))
+    # Cada pauta empieza en la hoja actual si quedan al menos 4,5 cm: el título va con su resultado y la
+    # tabla puede seguir en la hoja siguiente (repite el encabezado). Así no quedan huecos grandes al pie.
+    finales = []
     for p in pautas["pautas"]:
         estado = "cumplida" if p["hecha"] else "pendiente"
-        partes = [_h2(f'Pauta {p["numero"]}: {p["titulo"]} ({estado})', estilos)]
+        bloques.append(CondPageBreak(4.5 * cm))
+        bloques.append(_h2(f'Pauta {p["numero"]}: {p["titulo"]} ({estado})', estilos))
         if not p["hecha"]:
-            partes.append(Paragraph(f'Falta hacer el paso «{p["falta"]}» en la aplicación.', estilos["body"]))
-            bloques.append(KeepTogether(partes))
+            final = [Paragraph(f'Falta hacer el paso «{p["falta"]}» en la aplicación.', estilos["body"])]
+            bloques.append(final)
+            finales.append(final)
             continue
-        partes.append(Paragraph(f'<b>Resultado:</b> {p["resultado"]}', estilos["body"]))
+        bloques.append(Paragraph(f'<b>Resultado:</b> {p["resultado"]}', estilos["body"]))
         if p.get("caracteristicas"):
-            partes.append(Paragraph("<b>Características:</b> " + ", ".join(p["caracteristicas"]), estilos["body"]))
-        # El título de la pauta nunca queda solo al pie de una página: va junto con su tabla.
+            bloques.append(Paragraph("<b>Características:</b> " + ", ".join(p["caracteristicas"]), estilos["body"]))
         if p.get("tabla"):
-            partes.append(_tabla_datos(p["tabla"]["encabezados"], p["tabla"]["filas"], estilos))
-            partes.append(Spacer(1, 0.2 * cm))
-        bloques.append(KeepTogether(partes))
+            bloques.append(_tabla_datos(p["tabla"]["encabezados"], p["tabla"]["filas"], estilos, junta=False))
+            bloques.append(Spacer(1, 0.2 * cm))
+        final = []
         imagenes = [_imagen_segura(u, ancho=8.3 * cm, alto_max=7 * cm) for u in p.get("graficos", [])]
         imagenes = [i for i in imagenes if i]
         if imagenes:
             fila = Table([imagenes], colWidths=[ANCHO_CONTENIDO / len(imagenes)] * len(imagenes))
             fila.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 2),
                                       ("RIGHTPADDING", (0, 0), (-1, -1), 2)]))
-            bloques.append(fila)
-            bloques.append(Spacer(1, 0.2 * cm))
-        bloques.append(_callout(f'<b>Conclusión:</b> {p["conclusion"]}', estilos))
+            final += [fila, Spacer(1, 0.2 * cm)]
+        # Los gráficos van con su conclusión.
+        final.append(_callout(f'<b>Conclusión:</b> {p["conclusion"]}', estilos))
+        bloques.append(final)
+        finales.append(final)
         bloques.append(Spacer(1, 0.3 * cm))
+    # La conclusión general va pegada a la última pauta, para que no quede sola en una hoja.
     if pautas.get("conclusion_general"):
-        bloques.append(_callout(f'<b>Conclusión general:</b> {pautas["conclusion_general"]}', estilos))
-    return bloques
+        general = _callout(f'<b>Conclusión general:</b> {pautas["conclusion_general"]}', estilos)
+        if finales:
+            finales[-1] += [Spacer(1, 0.3 * cm), general]
+        else:
+            bloques.append(general)
+    return [KeepTogether(b) if isinstance(b, list) else b for b in bloques]
 
 
 def generar_pdf(resultado: dict, ruta_pdf: str, solo_pautas: bool = False) -> str:

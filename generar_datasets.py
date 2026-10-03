@@ -4,8 +4,8 @@
 - semillas: dataset público real de semillas de trigo (UCI «seeds», Charytanowicz et al., 2010,
   licencia CC BY 4.0), tomado de data/fuentes/seeds_dataset.txt. Columnas en español; en el
   enunciado de la actividad se llaman Area, Perimeter, ..., Class.
-- trigo_simulado: 300 granos simulados con la misma forma que el trigo real (promedios y relaciones
-  entre medidas de cada variedad), con semilla fija; la compacidad sale de su fórmula.
+- cafe: 300 granos de café simulados (Arábica, Robusta, Liberica) con las mismas 7 medidas de forma
+  que piden las pautas (área, perímetro, compacidad...), relacionadas entre sí; semilla fija.
 - diabetes, viviendas, vehiculos, clientes, sintetico, empleados, estudiantes, prestamos:
   generados con NumPy/Pandas usando una semilla fija (random_state=42) para que los
   resultados sean reproducibles, con relaciones estadísticas reales entre variables
@@ -97,31 +97,44 @@ def generar_semillas():
     return df
 
 
-def generar_trigo_simulado():
-    """Trigo simulado: 100 granos por variedad con la misma forma que el trigo real.
+def generar_cafe():
+    """Granos de café simulados: 100 granos de cada variedad (Arábica, Robusta, Liberica).
 
-    Para cada variedad se toman la media y la covarianza (cómo varían juntas las medidas) de los
-    granos reales y se sortean granos nuevos con esa misma distribución (semilla fija). La
-    compacidad no se sortea: se calcula con su fórmula, 4·π·área / perímetro², como en el
-    original, para que cada grano sea coherente."""
-    real = generar_semillas()
-    medidas = ["área", "perímetro", "largo_grano", "ancho_grano", "coef_asimetría", "largo_surco"]
-    rng = np.random.default_rng(42)
+    Medidas del grano verde en mm, mm² y gramos. Liberica es el más grande, Robusta el más chico
+    y redondo, y Arábica el más alargado. Cada grano se arma a partir de su largo y su ancho: el
+    área y el perímetro salen de la elipse que forman (con un poco de variación, porque un grano
+    no es una elipse perfecta), la compacidad de su fórmula 4·π·área / perímetro² y el peso del
+    volumen del grano. Así las medidas están relacionadas entre sí, como en un grano real."""
+    rng = np.random.default_rng(RANDOM_STATE)
+    #            largo (media, desvío)  ancho          grosor        densidad (g por mm³ de elipsoide)
+    variedades = {
+        "Arábica":  ((10.2, 0.65), (6.9, 0.45), (3.8, 0.28), 0.00122),
+        "Robusta":  ((8.5, 0.60), (7.0, 0.45), (4.2, 0.28), 0.00118),
+        "Liberica": ((12.1, 0.85), (7.9, 0.55), (4.4, 0.32), 0.00112),
+    }
     partes = []
-    for variedad, grupo in real.groupby("clase", sort=False):
-        valores = grupo[medidas].to_numpy(dtype=float)
-        nuevos = rng.multivariate_normal(valores.mean(axis=0), np.cov(valores, rowvar=False), size=100)
-        # Nada por debajo de lo mínimo posible (una medida física no puede ser 0 o negativa).
-        nuevos = np.maximum(nuevos, valores.min(axis=0) * 0.9)
-        parte = pd.DataFrame(nuevos, columns=medidas)
-        parte["clase"] = variedad
-        partes.append(parte)
+    for variedad, ((l_m, l_d), (a_m, a_d), (g_m, g_d), densidad) in variedades.items():
+        n = 100
+        tamano = rng.normal(0, 1, n)  # los granos grandes son grandes en todo
+        largo = l_m + l_d * (0.7 * tamano + 0.71 * rng.normal(0, 1, n))
+        ancho = a_m + a_d * (0.6 * tamano + 0.8 * rng.normal(0, 1, n))
+        grosor = g_m + g_d * (0.5 * tamano + 0.87 * rng.normal(0, 1, n))
+        a, b = largo / 2, ancho / 2
+        area = np.pi * a * b * rng.normal(1, 0.025, n)
+        # Perímetro de la elipse (fórmula de Ramanujan) con el borde un poco irregular.
+        perimetro = np.pi * (3 * (a + b) - np.sqrt((3 * a + b) * (a + 3 * b))) * rng.normal(1.01, 0.012, n)
+        volumen = np.pi / 6 * largo * ancho * grosor
+        peso = volumen * densidad * rng.normal(1, 0.06, n)
+        partes.append(pd.DataFrame({
+            "área": area, "perímetro": perimetro, "largo_grano": largo, "ancho_grano": ancho,
+            "grosor": grosor, "peso": peso, "clase": variedad,
+        }))
     df = pd.concat(partes, ignore_index=True)
     df["compacidad"] = 4 * np.pi * df["área"] / df["perímetro"] ** 2
-    df = df[["área", "perímetro", "compacidad", "largo_grano", "ancho_grano", "coef_asimetría", "largo_surco", "clase"]]
-    df = df.round({"área": 2, "perímetro": 2, "compacidad": 4, "largo_grano": 3, "ancho_grano": 3,
-                   "coef_asimetría": 3, "largo_surco": 3})
-    return df.sample(frac=1, random_state=42).reset_index(drop=True)
+    df = df[["área", "perímetro", "compacidad", "largo_grano", "ancho_grano", "grosor", "peso", "clase"]]
+    df = df.round({"área": 2, "perímetro": 2, "compacidad": 4, "largo_grano": 2, "ancho_grano": 2,
+                   "grosor": 2, "peso": 4})
+    return df.sample(frac=1, random_state=RANDOM_STATE).reset_index(drop=True)
 
 
 def generar_diabetes():
@@ -472,7 +485,7 @@ def main():
     generadores = {
         "iris.csv": generar_iris,
         "semillas.csv": generar_semillas,
-        "trigo_simulado.csv": generar_trigo_simulado,
+        "cafe.csv": generar_cafe,
         "diabetes.csv": generar_diabetes,
         "viviendas.csv": generar_viviendas,
         "vehiculos.csv": generar_vehiculos,

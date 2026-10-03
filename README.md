@@ -3,7 +3,7 @@
 ## ⬇️ Descargar la app
 Apretá el enlace y se descarga:
 
-- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.3/Instalar_DataExpert_IA.exe) — instalador versión 1.2.3, 81 MB
+- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe) — instalador versión 1.2.3, 81 MB
 
 **Plataforma web de análisis matemático, estadístico y Machine Learning**
 *Fundamentos y Algoritmia para Inteligencia Artificial*
@@ -12,7 +12,7 @@ Plataforma educativa que recorre un proyecto de ciencia de datos completo sobre 
 
 ## Aplicación de Windows
 
-**[Descargar el instalador para Windows (versión 1.2.3)](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.3/Instalar_DataExpert_IA.exe)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
+**[Descargar el instalador para Windows (versión 1.2.4)](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe)**: no necesita Python. Abre `Instalar_DataExpert_IA.exe`, elige la carpeta y sigue los pasos; queda un acceso directo en el escritorio.
 
 Para generar el instalador desde el código se usa `pc instalador/construir_instalador.bat` (detalles en `pc instalador/LEEME.txt`).
 
@@ -23,7 +23,7 @@ Para generar el instalador desde el código se usa `pc instalador/construir_inst
 - Se pueden entrenar varios datasets al mismo tiempo (también desde el panel de cada uno).
 - Campana en la barra: muestra lo que se está procesando con su avance y, al terminar, suena (una campana de unos 5 segundos) y ofrece «Ver resultado →». Cada aviso lleva el color de su dataset. Lo del dataset que tienes abierto no aparece (ya se ve en la página) y cada aviso se borra solo al entrar a ver su resultado; la escoba limpia todos de una vez.
 - Los 11 datasets incluidos tienen las columnas y categorías en español (tablas, gráficos, predicción y PDF).
-- **Semillas de trigo** (dataset real de UCI: 210 granos, 7 medidas, 3 variedades) y **Trigo simulado** (300 granos generados con la misma forma que el real): los dos traen la sección **«✅ Pautas de la actividad»** con las 7 pautas del curso (explorar con Pandas, StandardScaler, NumPy, estadística de área y perímetro, atípicos con 2σ, histograma y dispersión por variedad, K-Vecinos contra Árbol de Decisión). Cada pauta dice su resultado y se abre con su tabla, sus gráficos y su conclusión, y hay una conclusión general. El botón **«PDF de las pautas»** arma un PDF corto sólo con eso (la campana avisa mientras se genera), y el informe completo también incluye la sección. Aparece en cualquier dataset con columnas `área`, `perímetro` y una variable objetivo.
+- **Semillas de trigo** (dataset real de UCI: 210 granos, 7 medidas, 3 variedades) y **Granos de café** (300 granos simulados de Arábica, Robusta y Liberica con las mismas 7 medidas): los dos traen la sección **«✅ Pautas de la actividad»** con las 7 pautas del curso (explorar con Pandas, StandardScaler, NumPy, estadística de área y perímetro, atípicos con 2σ, histograma y dispersión por variedad, K-Vecinos contra Árbol de Decisión). Cada pauta dice su resultado y se abre con su tabla, sus gráficos y su conclusión, y hay una conclusión general. El botón **«PDF de las pautas»** arma un PDF corto sólo con eso (la campana avisa mientras se genera), y el informe completo también incluye la sección. Aparece en cualquier dataset con columnas `área`, `perímetro` y una variable objetivo.
 - El análisis de cada dataset se guarda: al volver (o al abrir otra vez la aplicación) los pasos hechos siguen marcados y se muestran sin recalcular, hasta pulsar «Reiniciar análisis». Los pasos siguen calculando aunque se cambie de página, y la aplicación avisa al terminar.
 - Color elegible para cada dataset (página e informe PDF).
 - Exploración y preprocesamiento con Pandas (nulos, duplicados, codificación, normalización).

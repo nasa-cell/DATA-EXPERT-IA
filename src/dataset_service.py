@@ -51,15 +51,15 @@ DATASETS = {
         "problema": "clasificacion",
         "color_a": "#fbbf24", "color_b": "#b45309",  # trigo: dorado -> marrón
     },
-    "trigo_simulado": {
-        "archivo": "trigo_simulado.csv",
-        "nombre": "Trigo simulado",
-        "icono": "🌾",
-        "imagen": "img/datasets/trigo_simulado.jpg",
-        "descripcion": "300 granos simulados con la misma forma que el trigo real: 3 variedades (Kama, Rosa, Canadiense) y 7 medidas del grano.",
+    "cafe": {
+        "archivo": "cafe.csv",
+        "nombre": "Granos de café",
+        "icono": "☕",
+        "imagen": "img/datasets/cafe.jpg",
+        "descripcion": "300 granos de café simulados: 3 variedades (Arábica, Robusta, Liberica) y 7 medidas del grano.",
         "objetivo": "clase",
         "problema": "clasificacion",
-        "color_a": "#a3e635", "color_b": "#3f6212",  # trigo verde (todavía en la espiga)
+        "color_a": "#d97706", "color_b": "#451a03",  # café: tostado claro -> oscuro
     },
     "diabetes": {
         "archivo": "diabetes.csv",
