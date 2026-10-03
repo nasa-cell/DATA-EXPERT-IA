@@ -49,6 +49,7 @@ DataExpert_IA/
 ├── README.md
 ├── INFORME_DATAEXPERT.md
 │
+├── pautas/                         # Entregable de la actividad: las 7 pautas (cuaderno, código, resultados, PDF)
 ├── data/                           # Los 11 datasets + alumnos_nuevos_prueba.csv (fuentes/: archivo original de las semillas)
 ├── src/
 │   ├── dataset_service.py          # Metadatos, datasets subidos, portadas, colores y análisis guardado

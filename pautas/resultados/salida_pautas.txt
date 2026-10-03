@@ -1,0 +1,156 @@
+
+==============================================================================
+PAUTA 1 · Cargar y explorar el dataset con Pandas
+==============================================================================
+Forma del dataset: 210 filas × 8 columnas
+
+Primeras filas:
+    área  perímetro  compacidad  largo_grano  ancho_grano  coef_asimetría  largo_surco clase
+0  15.26      14.84      0.8710        5.763        3.312           2.221        5.220  Kama
+1  14.88      14.57      0.8811        5.554        3.333           1.018        4.956  Kama
+2  14.29      14.09      0.9050        5.291        3.337           2.699        4.825  Kama
+3  13.84      13.94      0.8955        5.324        3.379           2.259        4.805  Kama
+4  16.14      14.99      0.9034        5.658        3.562           1.355        5.175  Kama
+
+Las 7 características: área, perímetro, compacidad, largo_grano, ancho_grano, coef_asimetría, largo_surco
+
+Tipos de dato:
+área              float64
+perímetro         float64
+compacidad        float64
+largo_grano       float64
+ancho_grano       float64
+coef_asimetría    float64
+largo_surco       float64
+clase                 str
+
+Valores nulos por columna:
+área              0
+perímetro         0
+compacidad        0
+largo_grano       0
+ancho_grano       0
+coef_asimetría    0
+largo_surco       0
+clase             0
+Total de valores nulos: 0
+
+Granos por variedad:
+clase
+Kama          70
+Rosa          70
+Canadiense    70
+
+Resumen estadístico (describe):
+          área  perímetro  compacidad  largo_grano  ancho_grano  coef_asimetría  largo_surco
+count  210.000    210.000     210.000      210.000      210.000         210.000      210.000
+mean    14.848     14.559       0.871        5.629        3.259           3.700        5.408
+std      2.910      1.306       0.024        0.443        0.378           1.504        0.491
+min     10.590     12.410       0.808        4.899        2.630           0.765        4.519
+25%     12.270     13.450       0.857        5.262        2.944           2.562        5.045
+50%     14.355     14.320       0.873        5.524        3.237           3.599        5.223
+75%     17.305     15.715       0.888        5.980        3.562           4.769        5.877
+max     21.180     17.250       0.918        6.675        4.033           8.456        6.550
+
+Conclusión: el dataset tiene 210 granos y 7 características numéricas, no tiene valores nulos y está equilibrado (70 granos de cada variedad).
+
+==============================================================================
+PAUTA 2 · Separar la variable objetivo y normalizar con StandardScaler
+==============================================================================
+X (características): (210, 7)   y (variedad): (210,)
+
+Antes y después de StandardScaler (media 0 y desviación 1 en todas):
+                media antes  desviación antes  media después  desviación después
+área                 14.848             2.903           -0.0                 1.0
+perímetro            14.559             1.303            0.0                 1.0
+compacidad            0.871             0.024            0.0                 1.0
+largo_grano           5.629             0.442           -0.0                 1.0
+ancho_grano           3.259             0.377           -0.0                 1.0
+coef_asimetría        3.700             1.500           -0.0                 1.0
+largo_surco           5.408             0.490           -0.0                 1.0
+
+Conclusión: después de normalizar, todas las características quedan con media 0 y desviación 1, así ninguna pesa más que otra al entrenar (importante para K-Vecinos, que compara distancias).
+
+==============================================================================
+PAUTA 3 · NumPy: vectores, matrices, producto punto, norma y sistema de ecuaciones
+==============================================================================
+v1 (grano 1) = [15.26  14.84   0.871]
+v2 (grano 2) = [14.88   14.57    0.8811]
+v1 + v2 = [30.14   29.41    1.7521]
+v1 - v2 = [ 0.38    0.27   -0.0101]
+3 · v1 = [45.78  44.52   2.613]
+Producto punto v1 · v2 (np.dot) = 444.0550
+Norma de v1 (np.linalg.norm) = 21.3038
+Norma de v2 = 20.8441
+Distancia entre v1 y v2 = 0.4663  (la que usa K-Vecinos)
+
+Matriz A (granos 1 a 3):
+[[15.26   14.84    0.871 ]
+ [14.88   14.57    0.8811]
+ [14.29   14.09    0.905 ]]
+Transpuesta de A:
+[[15.26   14.88   14.29  ]
+ [14.84   14.57   14.09  ]
+ [ 0.871   0.8811  0.905 ]]
+A × Aᵀ (np.dot):
+[[453.852 444.055 427.949]
+ [444.055 434.476 418.724]
+ [427.949 418.724 403.551]]
+
+Sistema A · w = b, con b = largo_grano = [5.763 5.554 5.291]
+Solución (np.linalg.solve): w = [ 1.2148 -0.9065  0.7782]
+Verificación A · w = [5.763 5.554 5.291]  (igual a b)
+
+Conclusión: cada grano es un vector con sus medidas; el producto punto, la norma y la distancia se calculan con NumPy, y el sistema se resolvió con np.linalg.solve (al multiplicar A por la solución se vuelve a obtener b).
+
+==============================================================================
+PAUTA 4 · Media, mediana, varianza y desviación de área y perímetro
+==============================================================================
+             media  mediana  varianza NumPy  desviación NumPy  varianza manual  desviación manual  diferencia varianza
+variable                                                                                                              
+área       14.8475   14.355          8.4260            2.9028           8.4260             2.9028                  0.0
+perímetro  14.5593   14.320          1.6974            1.3028           1.6974             1.3028                  0.0
+
+Conclusión: la media de área (14.85) es mayor que su mediana (14.36): hay algunos granos grandes que tiran el promedio para arriba. La varianza y la desviación de área calculadas a mano dan exactamente lo mismo que NumPy (diferencia 1.78e-15). Área varía más que perímetro.
+
+==============================================================================
+PAUTA 5 · Valores atípicos de área (media ± 2 desviaciones estándar)
+==============================================================================
+Media = 14.848   desviación = 2.903
+Límite inferior (media − 2σ) = 9.042
+Límite superior (media + 2σ) = 20.653
+
+Granos atípicos: 4 de 210
+      área  perímetro clase
+77   20.71      17.23  Rosa
+88   21.18      17.21  Rosa
+89   20.88      17.05  Rosa
+114  20.97      17.25  Rosa
+
+Conclusión: 4 granos (1.9%) quedan fuera del rango, todos por encima: son granos muy grandes (de la variedad Rosa), no errores de medición.
+
+==============================================================================
+PAUTA 6 · Histograma de área y dispersión área contra perímetro
+==============================================================================
+Gráficos guardados en resultados/: pauta6_histograma_area.png y pauta6_dispersion_area_perimetro.png
+Correlación entre área y perímetro: 0.994
+             área  perímetro
+clase                       
+Canadiense  11.87      13.25
+Kama        14.33      14.29
+Rosa        18.33      16.14
+
+Conclusión: área y perímetro van casi juntos. En la dispersión las 3 variedades forman grupos separados: los granos de Rosa son los más grandes, los de Canadiense los más chicos y los de Kama quedan en el medio.
+
+==============================================================================
+PAUTA 7 · K-Vecinos contra Árbol de Decisión (Accuracy)
+==============================================================================
+K-Vecinos (KNeighborsClassifier): Accuracy = 0.9048  (90.48%)
+Árbol de Decisión (DecisionTreeClassifier): Accuracy = 0.9286  (92.86%)
+
+Conclusión: gana Árbol de Decisión por 2.38%. Los dos aciertan alrededor de 9 de cada 10 granos del grupo de prueba, que no se usó para entrenar.
+
+==============================================================================
+CONCLUSIÓN GENERAL
+==============================================================================
+El dataset está completo y equilibrado; área y perímetro separan bien las 3 variedades de trigo, y los dos modelos las clasifican con buen acierto: K-Vecinos 90.48%, Árbol de Decisión 92.86%.
