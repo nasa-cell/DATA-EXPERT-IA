@@ -3,7 +3,7 @@
 ## ⬇️ Descargar la app
 Apretá el enlace y se descarga:
 
-- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe) — instalador versión 1.2.3, 81 MB
+- 🖥️ **PC (Windows):** [Apretá acá para descargar DataExpert IA](https://github.com/nasa-cell/DATA-EXPERT-IA/releases/download/v1.2.4/Instalar_DataExpert_IA.exe) — instalador versión 1.2.4, 81 MB
 
 **Plataforma web de análisis matemático, estadístico y Machine Learning**
 *Fundamentos y Algoritmia para Inteligencia Artificial*
@@ -43,14 +43,26 @@ Python 3.11+, Flask, Pandas, NumPy, Scikit-learn, Matplotlib, Seaborn, ReportLab
 ```text
 DataExpert_IA/
 ├── app.py                          # Rutas Flask (páginas y endpoints JSON)
-├── generar_datasets.py             # Genera los 9 CSV de data/
+├── generar_datasets.py             # Genera los 11 CSV de data/
 ├── generar_logo.py                 # Genera static/img/logo.png
 ├── requirements.txt
 ├── README.md
 ├── INFORME_DATAEXPERT.md
 │
-├── pautas/                         # Entregable de la actividad: las 7 pautas (cuaderno, código, resultados, PDF)
-├── data/                           # Los 11 datasets + alumnos_nuevos_prueba.csv (fuentes/: archivo original de las semillas)
+├── pautas/                         # Entregable de la actividad: las 7 pautas
+│   ├── LEEME.md                    # Qué pide cada pauta y dónde está resuelta
+│   ├── pautas.ipynb                # Cuaderno con las 7 pautas paso a paso
+│   ├── pautas.py                   # Lo mismo en un solo archivo de Python
+│   ├── codigo_de_la_app/           # Copia de los servicios de src/ que usan las pautas
+│   ├── datos/                      # semillas.csv
+│   └── resultados/                 # Tablas CSV, gráficos PNG, salida_pautas.txt y PDF_de_las_pautas.pdf
+│
+├── data/                           # Los 11 datasets + alumnos_nuevos_prueba.csv
+│   ├── semillas.csv                # Semillas de trigo (UCI)
+│   ├── cafe.csv                    # Granos de café (simulado)
+│   ├── ...                         # iris, diabetes, viviendas, vehiculos, clientes, sintetico, empleados, estudiantes, prestamos
+│   └── fuentes/                    # seeds_dataset.txt: archivo original de las semillas
+│
 ├── src/
 │   ├── dataset_service.py          # Metadatos, datasets subidos, portadas, colores y análisis guardado
 │   ├── preprocessing_service.py    # Exploración y preprocesamiento
@@ -58,7 +70,8 @@ DataExpert_IA/
 │   ├── linear_algebra_service.py   # Vectores, matrices, sistema de ecuaciones
 │   ├── visualization_service.py    # Histogramas, dispersión, correlación, matriz de confusión
 │   ├── machine_learning_service.py # Entrenamiento, evaluación y comparación de modelos
-│   ├── pdf_service.py              # Generación del informe PDF
+│   ├── pautas_service.py           # Las 7 pautas de la actividad (sección «Pautas de la actividad»)
+│   ├── pdf_service.py              # Informe PDF completo y PDF de las pautas
 │   ├── turnos.py                   # Cuántos procesos largos van a la vez (3 o 6) y la cola
 │   └── configuracion.py            # Rutas: código (solo lectura) y datos del usuario
 │
@@ -72,7 +85,17 @@ DataExpert_IA/
 │
 ├── resultados/                     # predicciones, historial y evaluación de modelos
 ├── informes/                       # DataExpert_IA_Informe.pdf
-└── pc instalador/                  # Scripts para crear el instalador de Windows
+├── datasets_subidos/               # Datasets que sube el usuario (se crea al usar la app, no se sube al repositorio)
+├── analisis_guardados/             # Análisis guardado de cada dataset (se crea al usar la app, no se sube al repositorio)
+│
+└── pc instalador/                  # Todo lo necesario para crear el instalador de Windows
+    ├── construir_instalador.bat    # Arma el instalador de principio a fin
+    ├── DataExpertIA.spec           # Empaquetado de la aplicación
+    ├── instalador.iss              # Guion del instalador (aquí va el número de versión)
+    ├── lanzador.py                 # Arranca la aplicación instalada y abre el navegador
+    ├── LEEME.txt                   # Pasos para generar el instalador
+    ├── recursos/                   # Íconos e imágenes del instalador
+    └── salida/                     # Instalar_DataExpert_IA.exe ya generado
 ```
 
 ## Instalación
